@@ -6,6 +6,7 @@ import { BottomNavigation } from './components/layout/BottomNavigation';
 import { DashboardView } from './views/DashboardView';
 import { CourseHubView } from './views/CourseHubView';
 import { LessonWorkspaceView } from './views/LessonWorkspaceView';
+import { MathLabView } from './views/MathLabView';
 import { AppDestination } from './types';
 import { getCourse, getTopic } from './data/courseCatalog';
 import { createDefaultMathCsState, loadMathCsState, MathCsState, saveMathCsState } from './utils/mathCsStorage';
@@ -40,7 +41,7 @@ const App: React.FC = () => {
       case 'dashboard': return <DashboardView state={state} onNavigate={navigate} />;
       case 'course': return <CourseHubView courseId={destination.courseId!} state={state} onNavigate={navigate} />;
       case 'lesson': return <LessonWorkspaceView courseId={destination.courseId!} topicId={destination.topicId!} state={state} onNavigate={navigate} onComplete={(topicId) => updateState(markTopicComplete(state, topicId))} />;
-      case 'math-lab': return <Placeholder title="Math Lab" description="Function Explorer, Matrix Lab, and Vector & Geometry Lab are being consolidated into this controlled workspace." />;
+      case 'math-lab': return <MathLabView initialLab={destination.labId} presetId={destination.topicId} />;
       case 'practice': return <Placeholder title="Practice" description="Topic-filtered guided practice will use the same deterministic curriculum question bank." />;
       case 'exams': return <Placeholder title="Exams" description="Course checkpoints and mock examinations will report results by topic." />;
       case 'progress': return <Placeholder title="Progress" description="Completion, mastery, and review recommendations remain local to this device." />;

@@ -1,0 +1,2 @@
+import { render, screen } from '@testing-library/react'; import { describe, expect, it } from 'vitest'; import { MathLabView } from './MathLabView';
+describe('MathLabView',()=>{it('exposes all three complete labs',()=>{render(<MathLabView/>);expect(screen.getAllByRole('tab')).toHaveLength(3);expect(screen.getByRole('tab',{name:/Function Explorer/})).toHaveAttribute('aria-selected','true');});});

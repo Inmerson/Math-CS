@@ -1,0 +1,12 @@
+export type Vector2 = [number, number];
+export type Vector3 = [number, number, number];
+export type VectorResult<T> = { ok: true; value: T } | { ok: false; error: string };
+const finite = (v: number[]) => v.every(Number.isFinite);
+export const dot = (a: number[], b: number[]): VectorResult<number> => a.length === b.length && finite(a) && finite(b) ? { ok: true, value: a.reduce((sum, value, i) => sum + value*b[i], 0) } : { ok: false, error: 'Vectors must have equal dimensions and finite coordinates' };
+export const magnitude = (value: number[]): VectorResult<number> => finite(value) ? { ok: true, value: Math.hypot(...value) } : { ok: false, error: 'Coordinates must be finite' };
+export const normalize = (value: number[]): VectorResult<number[]> => { const length = magnitude(value); if (length.ok === false) return { ok: false, error: length.error }; if (length.value === 0) return { ok: false, error: 'The zero vector has no direction' }; return { ok: true, value: value.map((entry) => entry/length.value) }; };
+export const addVectors = (a: number[], b: number[]): VectorResult<number[]> => a.length === b.length && finite(a) && finite(b) ? { ok: true, value: a.map((value,i) => value+b[i]) } : { ok: false, error: 'Vectors must have equal dimensions and finite coordinates' };
+export const scaleVector = (value: number[], scalar: number): VectorResult<number[]> => finite(value) && Number.isFinite(scalar) ? { ok: true, value: value.map((entry) => entry*scalar) } : { ok: false, error: 'Vector and scalar values must be finite' };
+export const applyMatrix2 = (matrix: [[number,number],[number,number]], vector: Vector2): VectorResult<Vector2> => finite([...matrix[0],...matrix[1],...vector]) ? { ok: true, value: [matrix[0][0]*vector[0]+matrix[0][1]*vector[1], matrix[1][0]*vector[0]+matrix[1][1]*vector[1]] } : { ok: false, error: 'Matrix and vector values must be finite' };
+export const lineFromPointDirection = (point: Vector2, direction: Vector2): VectorResult<string> => normalize(direction).ok ? { ok: true, value: `(x,y)=(${point[0]},${point[1]})+t(${direction[0]},${direction[1]})` } : { ok: false, error: 'A line direction cannot be the zero vector' };
+export const planeFromPointNormal = (point: Vector3, normal: Vector3): VectorResult<string> => normalize(normal).ok ? { ok: true, value: `${normal[0]}(x-${point[0]})+${normal[1]}(y-${point[1]})+${normal[2]}(z-${point[2]})=0` } : { ok: false, error: 'A plane normal cannot be the zero vector' };
