@@ -1,0 +1,210 @@
+name: Execute Math-CS interactive labs batch
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/execute-batch-3.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout conversion branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/math-cs-conversion
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: npm ci --include=optional
+
+      - name: Add bounded function sampling
+        run: |
+          set -euo pipefail
+          mkdir -p components/labs
+          cat > utils/functionSampling.ts <<'EOF'
+          export interface PlotPoint { x: number; y: number | null; approximation?: number | null; }
+          export interface FunctionParameter { id: string; label: string; value: number; min: number; max: number; step: number; }
+          export interface FunctionPreset {
+            id: string;
+            title: string;
+            formula: string;
+            interpretation: string;
+            parameters: FunctionParameter[];
+            domain: [number, number];
+            sample: (x: number, parameters: Record<string, number>) => number;
+            approximation?: (x: number, parameters: Record<string, number>) => number;
+          }
+
+          const presets: FunctionPreset[] = [
+            { id: 'functions-graphs', title: 'Quadratic Graph', formula: 'f(x)=ax²+bx+c', interpretation: 'Coefficients control curvature, horizontal tendency, and vertical position.', parameters: [{ id: 'a', label: 'Quadratic coefficient a', value: 1, min: -3, max: 3, step: 0.25 }, { id: 'b', label: 'Linear coefficient b', value: 0, min: -5, max: 5, step: 0.5 }, { id: 'c', label: 'Constant c', value: 0, min: -5, max: 5, step: 0.5 }], domain: [-5, 5], sample: (x,p) => p.a*x*x+p.b*x+p.c },
+            { id: 'sequences', title: 'Sequence Convergence', formula: 'aₙ=L+rⁿ', interpretation: 'When |r|<1, the terms approach L.', parameters: [{ id: 'L', label: 'Limit L', value: 1, min: -3, max: 3, step: 0.25 }, { id: 'r', label: 'Ratio r', value: 0.5, min: -0.9, max: 0.9, step: 0.1 }], domain: [0, 20], sample: (x,p) => p.L+Math.pow(p.r, Math.round(x)) },
+            { id: 'limits', title: 'Removable Limit', formula: 'f(x)=(x²−1)/(x−1)', interpretation: 'The nearby values approach 2 while x=1 remains a gap.', parameters: [], domain: [-3, 5], sample: (x) => Math.abs(x-1)<0.03 ? Number.NaN : (x*x-1)/(x-1) },
+            { id: 'continuity', title: 'Continuity Check', formula: 'f(x)=|x−a|', interpretation: 'The left and right values meet at the selected point.', parameters: [{ id: 'a', label: 'Reference point a', value: 0, min: -3, max: 3, step: 0.25 }], domain: [-5, 5], sample: (x,p) => Math.abs(x-p.a) },
+            { id: 'derivatives', title: 'Tangent and Derivative', formula: 'f(x)=x², tangent at a', interpretation: 'The tangent slope equals 2a.', parameters: [{ id: 'a', label: 'Tangent point a', value: 1, min: -3, max: 3, step: 0.25 }], domain: [-4, 4], sample: (x) => x*x, approximation: (x,p) => p.a*p.a+2*p.a*(x-p.a) },
+            { id: 'derivative-applications', title: 'Optimization', formula: 'f(x)=x²−4x+k', interpretation: 'The minimum stays at x=2 while k shifts the graph vertically.', parameters: [{ id: 'k', label: 'Vertical shift k', value: 0, min: -4, max: 4, step: 0.5 }], domain: [-1, 5], sample: (x,p) => x*x-4*x+p.k },
+            { id: 'integrals', title: 'Accumulated Area', formula: 'f(x)=mx+b', interpretation: 'The shaded interval represents signed accumulation.', parameters: [{ id: 'm', label: 'Slope m', value: 1, min: -2, max: 2, step: 0.25 }, { id: 'b', label: 'Intercept b', value: 0, min: -3, max: 3, step: 0.25 }], domain: [-4, 4], sample: (x,p) => p.m*x+p.b },
+            { id: 'taylor-series', title: 'Taylor Approximation', formula: 'eˣ≈1+x+x²/2', interpretation: 'The polynomial follows eˣ most closely near zero.', parameters: [], domain: [-2, 2], sample: (x) => Math.exp(x), approximation: (x) => 1+x+x*x/2 },
+          ];
+
+          export const getFunctionPreset = (id?: string): FunctionPreset | undefined => presets.find((preset) => preset.id === id) ?? presets[0];
+          export const getFunctionPresets = (): readonly FunctionPreset[] => presets;
+          export const clampParameter = (parameter: FunctionParameter, value: number): number => Math.min(parameter.max, Math.max(parameter.min, Number.isFinite(value) ? value : parameter.value));
+          export const samplePreset = (preset: FunctionPreset, values: Record<string, number>, count = 121): PlotPoint[] => {
+            const [start, end] = preset.domain;
+            return Array.from({ length: count }, (_, index) => {
+              const x = start + ((end-start)*index)/(count-1);
+              const y = preset.sample(x, values);
+              const approximation = preset.approximation?.(x, values);
+              return { x, y: Number.isFinite(y) ? y : null, approximation: approximation === undefined ? undefined : Number.isFinite(approximation) ? approximation : null };
+            });
+          };
+          EOF
+
+          cat > utils/functionSampling.test.ts <<'EOF'
+          import { describe, expect, it } from 'vitest';
+          import { getFunctionPreset, samplePreset } from './functionSampling';
+          describe('bounded function sampling', () => {
+            it('samples curriculum presets and preserves gaps', () => {
+              const quadratic = getFunctionPreset('functions-graphs')!;
+              expect(samplePreset(quadratic, { a: 1, b: 0, c: 0 }, 3).map((p) => p.y)).toEqual([25, 0, 25]);
+              const limit = samplePreset(getFunctionPreset('limits')!, {}, 161);
+              expect(limit.some((point) => point.y === null)).toBe(true);
+            });
+            it('provides tangent and Taylor comparison data', () => {
+              expect(samplePreset(getFunctionPreset('derivatives')!, { a: 1 }, 3).every((p) => p.approximation !== undefined)).toBe(true);
+              expect(samplePreset(getFunctionPreset('taylor-series')!, {}, 5)[2].approximation).toBeCloseTo(1);
+            });
+          });
+          EOF
+
+          cat > components/labs/FunctionExplorer.tsx <<'EOF'
+          import React, { useMemo, useState } from 'react';
+          import { RotateCcw } from 'lucide-react';
+          import { clampParameter, getFunctionPreset, samplePreset } from '../../utils/functionSampling';
+
+          interface FunctionExplorerProps { presetId?: string; }
+          const pathFor = (points: { x: number; y: number | null }[], width: number, height: number) => {
+            const finite = points.filter((p): p is { x: number; y: number } => p.y !== null);
+            if (!finite.length) return '';
+            const minX = Math.min(...points.map((p) => p.x)); const maxX = Math.max(...points.map((p) => p.x));
+            const ys = finite.map((p) => p.y); const minY = Math.min(...ys, -1); const maxY = Math.max(...ys, 1); const rangeY = maxY-minY || 1;
+            let drawing = '';
+            for (const point of points) { if (point.y === null) { drawing += ' '; continue; } const sx = ((point.x-minX)/(maxX-minX))*width; const sy = height-((point.y-minY)/rangeY)*height; drawing += `${drawing.trim().endsWith('Z') || !drawing.trim() ? 'M' : 'L'}${sx.toFixed(1)},${sy.toFixed(1)} `; }
+            return drawing;
+          };
+          export const FunctionExplorer: React.FC<FunctionExplorerProps> = ({ presetId }) => {
+            const preset = getFunctionPreset(presetId); if (!preset) return <div role="alert">Unsupported function preset</div>;
+            const defaults = Object.fromEntries(preset.parameters.map((p) => [p.id, p.value]));
+            const [values, setValues] = useState<Record<string, number>>(defaults);
+            React.useEffect(() => setValues(defaults), [preset.id]);
+            const points = useMemo(() => samplePreset(preset, values), [preset, values]);
+            const primaryPath = pathFor(points, 720, 340); const approximationPath = pathFor(points.map((p) => ({ x: p.x, y: p.approximation ?? null })), 720, 340);
+            return <section className="grid gap-5 xl:grid-cols-[280px_minmax(0,1fr)]"><div className="notebook-panel p-5"><h2 className="text-xl font-bold text-white">{preset.title}</h2><p className="formula-panel mt-4 font-mono text-cyan-100">{preset.formula}</p><div className="mt-5 space-y-5">{preset.parameters.map((parameter) => <label key={parameter.id} className="block text-sm text-slate-300">{parameter.label}<span className="float-right font-mono text-cyan-200">{values[parameter.id]}</span><input className="mt-2 w-full accent-cyan-300" type="range" min={parameter.min} max={parameter.max} step={parameter.step} value={values[parameter.id]} onChange={(event) => setValues((current) => ({ ...current, [parameter.id]: clampParameter(parameter, Number(event.target.value)) }))} /></label>)}</div><button className="focus-ring mt-5 inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm" onClick={() => setValues(defaults)}><RotateCcw size={15} />Reset</button></div><div className="notebook-panel p-4"><svg viewBox="0 0 720 340" className="h-auto w-full" role="img" aria-label={`${preset.title} graph`}><rect width="720" height="340" fill="#07111f" /><path d="M0 170 H720 M360 0 V340" stroke="rgba(148,163,184,.25)" /><path d={primaryPath} fill="none" stroke="currentColor" className="text-cyan-300" strokeWidth="3" /><path d={approximationPath} fill="none" stroke="currentColor" className="text-amber-300" strokeWidth="2" strokeDasharray="8 6" /></svg><p className="mt-4 leading-7 text-slate-300" aria-live="polite">{preset.interpretation}</p><p className="mt-2 text-xs text-slate-500">Cyan: function. Amber dashed: supported approximation or tangent.</p></div></section>;
+          };
+          EOF
+
+      - name: Add deterministic vector and matrix labs
+        run: |
+          set -euo pipefail
+          cat > utils/vectorMath.ts <<'EOF'
+          export type Vector2 = [number, number];
+          export type Vector3 = [number, number, number];
+          export type VectorResult<T> = { ok: true; value: T } | { ok: false; error: string };
+          const finite = (v: number[]) => v.every(Number.isFinite);
+          export const dot = (a: number[], b: number[]): VectorResult<number> => a.length === b.length && finite(a) && finite(b) ? { ok: true, value: a.reduce((sum, value, i) => sum + value*b[i], 0) } : { ok: false, error: 'Vectors must have equal dimensions and finite coordinates' };
+          export const magnitude = (value: number[]): VectorResult<number> => finite(value) ? { ok: true, value: Math.hypot(...value) } : { ok: false, error: 'Coordinates must be finite' };
+          export const normalize = (value: number[]): VectorResult<number[]> => { const length = magnitude(value); if (!length.ok) return length; if (length.value === 0) return { ok: false, error: 'The zero vector has no direction' }; return { ok: true, value: value.map((entry) => entry/length.value) }; };
+          export const addVectors = (a: number[], b: number[]): VectorResult<number[]> => a.length === b.length && finite(a) && finite(b) ? { ok: true, value: a.map((value,i) => value+b[i]) } : { ok: false, error: 'Vectors must have equal dimensions and finite coordinates' };
+          export const scaleVector = (value: number[], scalar: number): VectorResult<number[]> => finite(value) && Number.isFinite(scalar) ? { ok: true, value: value.map((entry) => entry*scalar) } : { ok: false, error: 'Vector and scalar values must be finite' };
+          export const applyMatrix2 = (matrix: [[number,number],[number,number]], vector: Vector2): VectorResult<Vector2> => finite([...matrix[0],...matrix[1],...vector]) ? { ok: true, value: [matrix[0][0]*vector[0]+matrix[0][1]*vector[1], matrix[1][0]*vector[0]+matrix[1][1]*vector[1]] } : { ok: false, error: 'Matrix and vector values must be finite' };
+          export const lineFromPointDirection = (point: Vector2, direction: Vector2): VectorResult<string> => normalize(direction).ok ? { ok: true, value: `(x,y)=(${point[0]},${point[1]})+t(${direction[0]},${direction[1]})` } : { ok: false, error: 'A line direction cannot be the zero vector' };
+          export const planeFromPointNormal = (point: Vector3, normal: Vector3): VectorResult<string> => normalize(normal).ok ? { ok: true, value: `${normal[0]}(x-${point[0]})+${normal[1]}(y-${point[1]})+${normal[2]}(z-${point[2]})=0` } : { ok: false, error: 'A plane normal cannot be the zero vector' };
+          EOF
+
+          cat > utils/vectorMath.test.ts <<'EOF'
+          import { describe, expect, it } from 'vitest';
+          import { applyMatrix2, dot, lineFromPointDirection, magnitude, normalize, planeFromPointNormal } from './vectorMath';
+          describe('vector mathematics', () => {
+            it('calculates vectors and transformations', () => { expect(dot([1,2],[3,4])).toEqual({ ok: true, value: 11 }); expect(magnitude([3,4])).toEqual({ ok: true, value: 5 }); expect(applyMatrix2([[0,-1],[1,0]],[2,1])).toEqual({ ok: true, value: [-1,2] }); });
+            it('rejects undefined directions and builds equations', () => { expect(normalize([0,0])).toEqual({ ok: false, error: 'The zero vector has no direction' }); expect(lineFromPointDirection([1,2],[3,4])).toEqual({ ok: true, value: '(x,y)=(1,2)+t(3,4)' }); expect(planeFromPointNormal([1,2,3],[0,0,1])).toEqual({ ok: true, value: '0(x-1)+0(y-2)+1(z-3)=0' }); });
+          });
+          EOF
+
+          cat > components/labs/VectorGeometryLab.tsx <<'EOF'
+          import React, { useState } from 'react';
+          import { addVectors, applyMatrix2, dot, lineFromPointDirection, magnitude, Vector2 } from '../../utils/vectorMath';
+          export const VectorGeometryLab: React.FC = () => {
+            const [u,setU] = useState<Vector2>([2,1]); const [v,setV] = useState<Vector2>([1,3]); const [mode,setMode] = useState<'vectors'|'transformations'|'lines'>('vectors');
+            const setCoordinate = (setter: React.Dispatch<React.SetStateAction<Vector2>>, vector: Vector2, index: number, value: number) => setter(index === 0 ? [value,vector[1]] : [vector[0],value]);
+            const interpretation = mode === 'vectors' ? `u+v=${JSON.stringify(addVectors(u,v).ok ? (addVectors(u,v) as {ok:true;value:number[]}).value : [])}; u·v=${dot(u,v).ok ? (dot(u,v) as {ok:true;value:number}).value : 'error'}; |u|=${magnitude(u).ok ? (magnitude(u) as {ok:true;value:number}).value.toFixed(2) : 'error'}` : mode === 'transformations' ? `90° rotation maps u to ${JSON.stringify((applyMatrix2([[0,-1],[1,0]],u) as {ok:true;value:Vector2}).value)}` : (lineFromPointDirection(u,v).ok ? (lineFromPointDirection(u,v) as {ok:true;value:string}).value : 'Choose a nonzero direction');
+            const arrow = (vector: Vector2, className: string) => <line x1="200" y1="200" x2={200+vector[0]*45} y2={200-vector[1]*45} className={className} stroke="currentColor" strokeWidth="4" markerEnd="url(#arrow)" />;
+            return <section className="grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)]"><div className="notebook-panel p-5"><h2 className="text-xl font-bold text-white">Vector & Geometry Lab</h2><div className="mt-4 grid grid-cols-3 gap-2">{(['vectors','transformations','lines'] as const).map((item) => <button key={item} className={`focus-ring rounded-lg px-2 py-2 text-xs capitalize ${mode===item?'bg-cyan-300 text-slate-950':'border border-white/10'}`} onClick={() => setMode(item)}>{item}</button>)}</div>{[[u,setU,'u'],[v,setV,'v']].map(([vector,setter,label]) => <fieldset key={label as string} className="mt-5"><legend className="font-semibold text-white">Vector {label as string}</legend><div className="mt-2 grid grid-cols-2 gap-2">{[0,1].map((index) => <label key={index} className="text-xs text-slate-400">{index?'y':'x'}<input type="number" className="focus-ring mt-1 w-full rounded-lg border border-white/10 bg-slate-950 p-2 text-white" value={(vector as Vector2)[index]} onChange={(event) => setCoordinate(setter as React.Dispatch<React.SetStateAction<Vector2>>, vector as Vector2, index, Number(event.target.value))} /></label>)}</div></fieldset>)}</div><div className="notebook-panel p-4"><svg viewBox="0 0 400 400" className="mx-auto w-full max-w-xl" role="img" aria-label="Coordinate plane showing vectors u and v"><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="currentColor" /></marker></defs><rect width="400" height="400" fill="#07111f" /><path d="M0 200H400M200 0V400" stroke="rgba(148,163,184,.35)" />{arrow(u,'text-cyan-300')}{arrow(v,'text-amber-300')}</svg><p className="formula-panel mt-4 text-sm text-slate-200" aria-live="polite">{interpretation}</p><p className="mt-2 text-xs text-slate-500">Cyan arrow: u. Amber arrow: v. The text panel carries the complete result.</p></div></section>;
+          };
+          EOF
+
+          cat > components/labs/MatrixLab.tsx <<'EOF'
+          import React, { useMemo, useState } from 'react';
+          import { getDeterminant, getInverse, multiplyMatrices } from '../../utils/matrixMath';
+          type Matrix = number[][];
+          const parse = (text: string): { ok: true; value: Matrix } | { ok: false; error: string } => { const rows = text.trim().split(/\n+/).map((row) => row.trim().split(/[ ,]+/).map(Number)); if (!text.trim()) return { ok:false,error:'Enter at least one row' }; if (rows.some((row) => row.some((value) => !Number.isFinite(value)))) return { ok:false,error:'Use finite numerical entries' }; if (new Set(rows.map((row) => row.length)).size !== 1) return { ok:false,error:'All rows must have the same length' }; return { ok:true,value:rows }; };
+          export const MatrixLab: React.FC = () => {
+            const [a,setA]=useState('1 2\n3 4'); const [b,setB]=useState('1 0\n0 1'); const [operation,setOperation]=useState<'determinant'|'inverse'|'multiply'>('determinant');
+            const result = useMemo(() => { const A=parse(a); if(!A.ok)return A.error; if(operation==='determinant'){const value=getDeterminant(A.value);return value===null?'This operation requires a square matrix':`det(A) = ${value}`;} if(operation==='inverse'){const value=getInverse(A.value);return value?`A⁻¹ = ${JSON.stringify(value.map((row)=>row.map((x)=>Math.round(x*1000)/1000)))}`:'A singular matrix has no inverse';} const B=parse(b); if(!B.ok)return B.error; const value=multiplyMatrices(A.value,B.value);return value?`AB = ${JSON.stringify(value)}`:'Columns of A must equal rows of B'; },[a,b,operation]);
+            return <section className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]"><div className="notebook-panel p-5"><h2 className="text-xl font-bold text-white">Matrix Lab</h2><label className="mt-4 block text-sm text-slate-300">Operation<select value={operation} onChange={(event)=>setOperation(event.target.value as typeof operation)} className="focus-ring mt-2 w-full rounded-lg border border-white/10 bg-slate-950 p-2"><option value="determinant">Determinant</option><option value="inverse">Inverse</option><option value="multiply">Multiply A×B</option></select></label><label className="mt-4 block text-sm text-slate-300">Matrix A<textarea value={a} onChange={(event)=>setA(event.target.value)} rows={4} className="focus-ring mt-2 w-full rounded-lg border border-white/10 bg-slate-950 p-3 font-mono" /></label>{operation==='multiply'&&<label className="mt-4 block text-sm text-slate-300">Matrix B<textarea value={b} onChange={(event)=>setB(event.target.value)} rows={4} className="focus-ring mt-2 w-full rounded-lg border border-white/10 bg-slate-950 p-3 font-mono" /></label>}</div><div className="notebook-panel p-5"><h3 className="font-semibold text-white">Deterministic result</h3><p className="formula-panel mt-4 break-words font-mono text-cyan-100" role="status">{result}</p><div className="mt-5 text-sm leading-7 text-slate-300"><p>Rows are entered on separate lines; values use spaces or commas.</p><p className="mt-2">Determinants describe oriented scale, inverses undo transformations, and products compose transformations.</p></div></div></section>;
+          };
+          EOF
+
+      - name: Add Math Lab host and integration
+        run: |
+          set -euo pipefail
+          cat > views/MathLabView.tsx <<'EOF'
+          import React, { useState } from 'react';
+          import { FunctionSquare, Grid3X3, Move3D } from 'lucide-react';
+          import { MathLabId } from '../types';
+          import { FunctionExplorer } from '../components/labs/FunctionExplorer';
+          import { MatrixLab } from '../components/labs/MatrixLab';
+          import { VectorGeometryLab } from '../components/labs/VectorGeometryLab';
+          interface MathLabViewProps { initialLab?: MathLabId; presetId?: string; }
+          export const MathLabView: React.FC<MathLabViewProps> = ({ initialLab='function', presetId }) => { const [active,setActive]=useState<MathLabId>(initialLab); const tabs=[{id:'function' as const,label:'Function Explorer',icon:FunctionSquare},{id:'matrix' as const,label:'Matrix Lab',icon:Grid3X3},{id:'vector-geometry' as const,label:'Vector & Geometry',icon:Move3D}]; return <div className="mx-auto max-w-7xl"><header><p className="text-xs font-bold uppercase tracking-[.2em] text-cyan-300">Controlled interactive workspace</p><h1 className="mt-2 text-3xl font-bold text-white md:text-4xl">Math Lab</h1><p className="mt-3 text-slate-300">Explore curriculum-approved models without executing arbitrary expressions.</p></header><div className="mt-6 flex flex-wrap gap-2" role="tablist" aria-label="Mathematics laboratories">{tabs.map(({id,label,icon:Icon})=><button key={id} role="tab" aria-selected={active===id} className={`focus-ring inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold ${active===id?'bg-cyan-300 text-slate-950':'notebook-panel text-slate-200'}`} onClick={()=>setActive(id)}><Icon size={17}/>{label}</button>)}</div><div className="mt-6">{active==='function'?<FunctionExplorer presetId={presetId}/>:active==='matrix'?<MatrixLab/>:<VectorGeometryLab/>}</div></div>; };
+          EOF
+
+          python3 - <<'PY'
+          from pathlib import Path
+          app=Path('App.tsx').read_text()
+          app=app.replace("import { LessonWorkspaceView } from './views/LessonWorkspaceView';", "import { LessonWorkspaceView } from './views/LessonWorkspaceView';\nimport { MathLabView } from './views/MathLabView';")
+          app=app.replace("case 'math-lab': return <Placeholder title=\"Math Lab\" description=\"Function Explorer, Matrix Lab, and Vector & Geometry Lab are being consolidated into this controlled workspace.\" />;", "case 'math-lab': return <MathLabView initialLab={destination.labId} presetId={destination.topicId} />;")
+          Path('App.tsx').write_text(app)
+          PY
+
+          cat > components/labs/FunctionExplorer.test.tsx <<'EOF'
+          import { render, screen } from '@testing-library/react'; import { describe, expect, it } from 'vitest'; import { FunctionExplorer } from './FunctionExplorer';
+          describe('FunctionExplorer',()=>{it('renders bounded labelled controls and interpretation',()=>{render(<FunctionExplorer presetId="functions-graphs"/>);expect(screen.getByRole('img',{name:/Quadratic Graph graph/})).toBeInTheDocument();expect(screen.getByLabelText('Quadratic coefficient a')).toHaveAttribute('min','-3');expect(screen.getByText(/Coefficients control curvature/)).toBeInTheDocument();});});
+          EOF
+          cat > components/labs/VectorGeometryLab.test.tsx <<'EOF'
+          import { render, screen } from '@testing-library/react'; import { describe, expect, it } from 'vitest'; import { VectorGeometryLab } from './VectorGeometryLab';
+          describe('VectorGeometryLab',()=>{it('provides labels, equivalent visual description, and text results',()=>{render(<VectorGeometryLab/>);expect(screen.getByRole('img',{name:/showing vectors u and v/})).toBeInTheDocument();expect(screen.getAllByLabelText('x')).toHaveLength(2);expect(screen.getByText(/u\+v=/)).toBeInTheDocument();});});
+          EOF
+          cat > components/labs/MatrixLab.test.tsx <<'EOF'
+          import { render, screen } from '@testing-library/react'; import { describe, expect, it } from 'vitest'; import { MatrixLab } from './MatrixLab';
+          describe('MatrixLab',()=>{it('returns a deterministic determinant',()=>{render(<MatrixLab/>);expect(screen.getByRole('status')).toHaveTextContent('det(A) = -2');});});
+          EOF
+          cat > views/MathLabView.test.tsx <<'EOF'
+          import { render, screen } from '@testing-library/react'; import { describe, expect, it } from 'vitest'; import { MathLabView } from './MathLabView';
+          describe('MathLabView',()=>{it('exposes all three complete labs',()=>{render(<MathLabView/>);expect(screen.getAllByRole('tab')).toHaveLength(3);expect(screen.getByRole('tab',{name:/Function Explorer/})).toHaveAttribute('aria-selected','true');});});
+          EOF
+
+      - name: Verify and commit labs
+        run: |
+          set -euo pipefail
+          npm test -- utils/functionSampling.test.ts utils/vectorMath.test.ts components/labs/FunctionExplorer.test.tsx components/labs/MatrixLab.test.tsx components/labs/VectorGeometryLab.test.tsx views/MathLabView.test.tsx
+          npm run verify
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: add controlled Math-CS laboratories"
+          git push origin feat/math-cs-conversion
