@@ -1,2 +1,16 @@
 import React from 'react';
-export const AnimatedBackground: React.FC = () => <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-[#07111f]"><div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_10%,rgba(34,211,238,0.08),transparent_34%),linear-gradient(180deg,#07111f_0%,#091522_55%,#06101b_100%)]" /><div className="coordinate-grid absolute inset-0 opacity-40" /><div className="ambient-light absolute -right-32 top-1/3 size-[32rem] rounded-full bg-cyan-400/5 blur-[110px]" /></div>;
+
+export const AnimatedBackground: React.FC = () => (
+  <div
+    data-testid="cosmic-background"
+    aria-hidden="true"
+    className="cosmic-shell pointer-events-none fixed inset-0 -z-10 overflow-hidden"
+  >
+    <div
+      data-cosmic-layer="nebula"
+      className="absolute inset-0 bg-[radial-gradient(circle_at_82%_8%,rgba(98,168,255,.12),transparent_31%),radial-gradient(circle_at_18%_75%,rgba(124,131,255,.07),transparent_34%),linear-gradient(180deg,#030711_0%,#07111f_58%,#030711_100%)]"
+    />
+    <div data-cosmic-layer="stars" className="cosmic-starfield absolute inset-0" />
+    <div data-cosmic-layer="grid" className="coordinate-grid absolute inset-0 opacity-20" />
+  </div>
+);

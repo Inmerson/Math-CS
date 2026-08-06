@@ -2,5 +2,35 @@ import React, { useMemo, useState } from 'react';
 import { CourseId, TopicId } from '../domain/curriculum';
 import { COURSES, getCourse } from '../data/courseCatalog';
 import { QuizRunner, QuizSubmission } from '../components/quiz/QuizRunner';
+import { CosmicPageHeader } from '../components/cosmic/CosmicPageHeader';
+
 interface PracticeViewProps { onComplete: (result: QuizSubmission) => void; }
-export const PracticeView:React.FC<PracticeViewProps>=({onComplete})=>{const[courseId,setCourseId]=useState<CourseId>('math-analysis');const course=getCourse(courseId)!;const[topicId,setTopicId]=useState<TopicId>(course.topics[0].id);const[difficulty,setDifficulty]=useState<1|2|3>(2);React.useEffect(()=>setTopicId(getCourse(courseId)!.topics[0].id),[courseId]);const topic=getCourse(courseId)!.topics.find((item)=>item.id===topicId)!;const quiz=useMemo(()=>({...topic.quiz,id:`practice-${topic.id}`,title:`${topic.title} guided practice`,questions:[...topic.practiceQuestions,...topic.quiz.questions].filter((question,index,array)=>array.findIndex((item)=>item.id===question.id)===index).slice(0,Math.max(2,difficulty+1))}),[topic,difficulty]);return <div className="mx-auto max-w-4xl"><h1 className="text-3xl font-bold text-white">Practice</h1><div className="notebook-panel mt-5 grid gap-4 p-4 sm:grid-cols-3"><label className="text-sm text-slate-300">Course<select aria-label="Practice course" className="focus-ring mt-2 w-full rounded-lg border border-white/10 bg-slate-950 p-2" value={courseId} onChange={(e)=>setCourseId(e.target.value as CourseId)}>{COURSES.map((item)=><option key={item.id} value={item.id}>{item.shortTitle}</option>)}</select></label><label className="text-sm text-slate-300">Topic<select aria-label="Practice topic" className="focus-ring mt-2 w-full rounded-lg border border-white/10 bg-slate-950 p-2" value={topicId} onChange={(e)=>setTopicId(e.target.value as TopicId)}>{getCourse(courseId)!.topics.map((item)=><option key={item.id} value={item.id}>{item.title}</option>)}</select></label><label className="text-sm text-slate-300">Difficulty<select aria-label="Practice difficulty" className="focus-ring mt-2 w-full rounded-lg border border-white/10 bg-slate-950 p-2" value={difficulty} onChange={(e)=>setDifficulty(Number(e.target.value) as 1|2|3)}><option value={1}>Foundation</option><option value={2}>Standard</option><option value={3}>Challenge</option></select></label></div><div className="notebook-panel mt-5 p-5"><QuizRunner key={`${courseId}-${topicId}-${difficulty}`} courseId={courseId} topicId={topicId} quiz={quiz} onComplete={onComplete}/></div></div>;};
+
+export const PracticeView: React.FC<PracticeViewProps> = ({ onComplete }) => {
+  const [courseId, setCourseId] = useState<CourseId>('math-analysis');
+  const course = getCourse(courseId)!;
+  const [topicId, setTopicId] = useState<TopicId>(course.topics[0].id);
+  const [difficulty, setDifficulty] = useState<1 | 2 | 3>(2);
+  React.useEffect(() => setTopicId(getCourse(courseId)!.topics[0].id), [courseId]);
+  const topic = getCourse(courseId)!.topics.find((item) => item.id === topicId)!;
+  const quiz = useMemo(() => ({
+    ...topic.quiz,
+    id: `practice-${topic.id}`,
+    title: `${topic.title} guided practice`,
+    questions: [...topic.practiceQuestions, ...topic.quiz.questions]
+      .filter((question, index, array) => array.findIndex((item) => item.id === question.id) === index)
+      .slice(0, Math.max(2, difficulty + 1)),
+  }), [topic, difficulty]);
+
+  return (
+    <div data-testid="practice-shell" className="cosmic-assessment-shell mx-auto max-w-4xl">
+      <CosmicPageHeader title="Practice" eyebrow="Guided problem solving" description="Filter structured questions by course, topic, and difficulty while keeping grading deterministic." accent="blue" />
+      <div className="cosmic-glass mt-5 grid gap-4 rounded-2xl p-4 sm:grid-cols-3">
+        <label className="text-sm text-slate-300">Course<select aria-label="Practice course" className="focus-ring mt-2 w-full rounded-lg border border-white/10 bg-slate-950 p-2" value={courseId} onChange={(e) => setCourseId(e.target.value as CourseId)}>{COURSES.map((item) => <option key={item.id} value={item.id}>{item.shortTitle}</option>)}</select></label>
+        <label className="text-sm text-slate-300">Topic<select aria-label="Practice topic" className="focus-ring mt-2 w-full rounded-lg border border-white/10 bg-slate-950 p-2" value={topicId} onChange={(e) => setTopicId(e.target.value as TopicId)}>{getCourse(courseId)!.topics.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
+        <label className="text-sm text-slate-300">Difficulty<select aria-label="Practice difficulty" className="focus-ring mt-2 w-full rounded-lg border border-white/10 bg-slate-950 p-2" value={difficulty} onChange={(e) => setDifficulty(Number(e.target.value) as 1 | 2 | 3)}><option value={1}>Foundation</option><option value={2}>Standard</option><option value={3}>Challenge</option></select></label>
+      </div>
+      <div className="cosmic-glass mt-5 rounded-2xl p-5"><QuizRunner key={`${courseId}-${topicId}-${difficulty}`} courseId={courseId} topicId={topicId} quiz={quiz} onComplete={onComplete} /></div>
+    </div>
+  );
+};
