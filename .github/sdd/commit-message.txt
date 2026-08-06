@@ -1,2 +1,0 @@
-feat: add cinematic cosmic dashboard
-
