@@ -52,3 +52,11 @@ Baseline head before implementation: `3d2dbabca7c62e89c5840ca8f9f4f05f25a765be`.
 - Deliverables: blue/cyan Math I card, violet/indigo Math II card, typed visual variants, wireframe illustrations, accessible course-progress rings, and CourseCard test coverage.
 - Review: course identity is derived solely from the typed course ID; progress, completion count, recommendation, latest checkpoint, and navigation semantics are preserved.
 
+## Task 7 — Apply Restrained Cosmic Styling to Internal Views
+
+- Status: COMPLETE
+- RED/GREEN evidence: task-runner run `31094041999`; shared page-header and course-shell assertions failed before implementation, then all affected view tests, typecheck, full verify, and Pages build succeeded.
+- Commit: `944bbc9a2bfb9dfb7d0958ab6af9b06fdc5ecb13`
+- Deliverables: `CosmicPageHeader`; course, lesson, lab, practice, exams, progress, formula, and assistant cosmic shells; visual-system assertions in existing tests.
+- Review: no internal view uses the photorealistic hero asset; reading and assessment surfaces remain high-contrast; original lab tabs, quiz construction, grading callbacks, formula persistence, assistant scope, and navigation behavior remain unchanged.
+
