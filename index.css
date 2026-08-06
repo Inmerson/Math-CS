@@ -361,3 +361,83 @@ select:focus-visible {
     display: none;
   }
 }
+
+.cosmic-touch-target {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.cosmic-mobile-safe-area {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+.cosmic-glass,
+.cosmic-card,
+.cosmic-hero {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cosmic-hero h1,
+.cosmic-page-header h1 {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767px) {
+  .cosmic-hero {
+    min-height: auto;
+    padding-bottom: 15rem;
+  }
+
+  .cosmic-hero__content {
+    padding: 2rem 1.25rem 1.5rem;
+  }
+
+  .cosmic-hero__image {
+    inset: auto 0 0;
+    height: 16.5rem;
+  }
+
+  .cosmic-hero__image img {
+    object-position: 68% center;
+    opacity: 0.88;
+  }
+
+  .cosmic-hero__scrim {
+    background:
+      linear-gradient(180deg, rgba(3, 7, 17, .99) 0%, rgba(3, 7, 17, .96) 43%, rgba(3, 7, 17, .35) 72%, rgba(3, 7, 17, .62) 100%),
+      linear-gradient(90deg, rgba(3, 7, 17, .52), transparent 72%);
+  }
+
+  .cosmic-progress-ring--lg {
+    --ring-size: 6rem;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .cosmic-hero {
+    min-height: 28rem;
+  }
+
+  .cosmic-hero__content {
+    max-width: 62%;
+  }
+}
+
+@media (pointer: coarse) {
+  button,
+  [role="button"],
+  [role="tab"],
+  a {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cosmic-hero__image img,
+  .cosmic-starfield::before,
+  .cosmic-starfield::after {
+    animation: none !important;
+    transform: none !important;
+  }
+}

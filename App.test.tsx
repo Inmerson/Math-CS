@@ -13,6 +13,7 @@ describe('Math-CS app shell', () => {
     expect(screen.getAllByRole('main')).toHaveLength(1);
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Mobile navigation' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Math I' })).toBeVisible();
     expect(document.querySelector('[aria-hidden="true"]')).not.toBeNull();
   });
