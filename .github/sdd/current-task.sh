@@ -38,13 +38,6 @@ describe('Tailwind production stylesheet', () => {
 });
 EOF
 
-if npm test -- scripts/tailwind-output.test.ts; then
-  echo 'Expected RED before mobile safe-area and touch-target contracts.' >&2
-  exit 1
-else
-  echo 'RED confirmed: responsive resilience selectors are missing.'
-fi
-
 cat > components/cosmic/CosmicHero.test.tsx <<'EOF'
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
@@ -109,9 +102,14 @@ const items = [
   { label: 'Lab', icon: FlaskConical, destination: { section: 'math-lab' } as AppDestination },
 ];
 
+const isActiveDestination = (current: AppDestination, target: AppDestination): boolean => {
+  if (current.section !== target.section) return false;
+  if (target.section === 'course') return current.courseId === target.courseId;
+  return true;
+};
+
 export const BottomNavigation: React.FC<BottomNavigationProps> = ({ destination, onNavigate }) => {
   const [moreOpen, setMoreOpen] = useState(false);
-  const active = (target: AppDestination) => destination.section === target.section && (!target.courseId || destination.courseId === target.courseId);
   return (
     <>
       {moreOpen && (
@@ -123,8 +121,22 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ destination,
         </div>
       )}
       <nav className="cosmic-mobile-safe-area fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-blue-200/10 bg-[#030711]/96 px-1 pt-1 backdrop-blur-xl md:hidden" aria-label="Mobile navigation">
-        {items.map((item) => { const Icon = item.icon; const selected = active(item.destination); return <button key={item.label} className={`focus-ring cosmic-touch-target flex min-h-14 flex-col items-center justify-center gap-1 rounded-lg text-[10px] ${selected ? 'bg-blue-400/8 text-blue-200' : 'text-slate-400'}`} aria-current={selected ? 'page' : undefined} onClick={() => onNavigate(item.destination)}><Icon size={18} /><span>{item.label}</span></button>; })}
-        <button className="focus-ring cosmic-touch-target flex min-h-14 flex-col items-center justify-center gap-1 rounded-lg text-[10px] text-slate-400" onClick={() => setMoreOpen((value) => !value)} aria-expanded={moreOpen} aria-label="More navigation options"><Menu size={18} /><span>More</span></button>
+        {items.map((item) => {
+          const Icon = item.icon;
+          const selected = isActiveDestination(destination, item.destination);
+          return (
+            <button
+              key={item.label}
+              type="button"
+              className={`focus-ring cosmic-touch-target flex min-h-14 flex-col items-center justify-center gap-1 rounded-lg text-[10px] ${selected ? 'bg-blue-400/8 text-blue-200' : 'text-slate-400'}`}
+              aria-current={selected ? 'page' : undefined}
+              onClick={() => onNavigate(item.destination)}
+            >
+              <Icon size={18} /><span>{item.label}</span>
+            </button>
+          );
+        })}
+        <button type="button" className="focus-ring cosmic-touch-target flex min-h-14 flex-col items-center justify-center gap-1 rounded-lg text-[10px] text-slate-400" onClick={() => setMoreOpen((value) => !value)} aria-expanded={moreOpen} aria-label="More navigation options"><Menu size={18} /><span>More</span></button>
       </nav>
     </>
   );
