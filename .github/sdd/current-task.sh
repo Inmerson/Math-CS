@@ -1,0 +1,278 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cat > components/AnimatedBackground.test.tsx <<'EOF'
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+import { AnimatedBackground } from './AnimatedBackground';
+
+describe('AnimatedBackground', () => {
+  it('renders decorative restrained cosmic layers', () => {
+    render(<AnimatedBackground />);
+    const background = screen.getByTestId('cosmic-background');
+    expect(background).toHaveAttribute('aria-hidden', 'true');
+    expect(background).toHaveClass('cosmic-shell');
+    expect(background.querySelectorAll('[data-cosmic-layer]')).toHaveLength(3);
+  });
+});
+EOF
+
+if npm test -- components/AnimatedBackground.test.tsx; then
+  echo 'Expected RED before implementation, but the test passed.' >&2
+  exit 1
+else
+  echo 'RED confirmed: cosmic background contract is not implemented yet.'
+fi
+
+cat > components/AnimatedBackground.tsx <<'EOF'
+import React from 'react';
+
+export const AnimatedBackground: React.FC = () => (
+  <div
+    data-testid="cosmic-background"
+    aria-hidden="true"
+    className="cosmic-shell pointer-events-none fixed inset-0 -z-10 overflow-hidden"
+  >
+    <div
+      data-cosmic-layer="nebula"
+      className="absolute inset-0 bg-[radial-gradient(circle_at_82%_8%,rgba(98,168,255,.12),transparent_31%),radial-gradient(circle_at_18%_75%,rgba(124,131,255,.07),transparent_34%),linear-gradient(180deg,#030711_0%,#07111f_58%,#030711_100%)]"
+    />
+    <div data-cosmic-layer="stars" className="cosmic-starfield absolute inset-0" />
+    <div data-cosmic-layer="grid" className="coordinate-grid absolute inset-0 opacity-20" />
+  </div>
+);
+EOF
+
+cat > index.css <<'EOF'
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  --cosmic-void: #030711;
+  --cosmic-navy: #07111f;
+  --cosmic-surface: #0b1726;
+  --cosmic-raised: #101d30;
+  --cosmic-text: #f5f7fb;
+  --cosmic-muted: #9aa9bd;
+  --cosmic-blue: #62a8ff;
+  --cosmic-cyan: #67e8f9;
+  --cosmic-violet: #a78bfa;
+  --cosmic-indigo: #7c83ff;
+  --cosmic-gold: #f4d7aa;
+  --cosmic-border: rgba(165, 190, 225, 0.16);
+  --cosmic-border-strong: rgba(165, 190, 225, 0.28);
+  --cosmic-focus: #b7e8ff;
+  --surface: var(--cosmic-surface);
+  --surface-raised: var(--cosmic-raised);
+  --text: var(--cosmic-text);
+  --muted: var(--cosmic-muted);
+  --accent: var(--cosmic-cyan);
+  --accent-warm: var(--cosmic-gold);
+  --border: var(--cosmic-border);
+  --focus: var(--cosmic-focus);
+}
+
+html {
+  min-height: 100%;
+  background: var(--cosmic-void);
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100%;
+  overflow-x: hidden;
+  background: var(--cosmic-void);
+  color: var(--cosmic-text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+.cosmic-shell {
+  background: var(--cosmic-void);
+}
+
+.cosmic-glass {
+  border: 1px solid var(--cosmic-border);
+  background: linear-gradient(145deg, rgba(12, 25, 43, 0.88), rgba(5, 12, 24, 0.8));
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32), inset 0 1px rgba(255, 255, 255, 0.035);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+.cosmic-card {
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+
+.cosmic-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--cosmic-border-strong);
+}
+
+.cosmic-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(98, 168, 255, 0.78), rgba(167, 139, 250, 0.5), transparent);
+}
+
+.cosmic-button {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.12), 0 8px 24px rgba(0, 0, 0, 0.22);
+  transition: transform 160ms ease, filter 160ms ease, box-shadow 160ms ease;
+}
+
+.cosmic-button:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.cosmic-glow-blue {
+  box-shadow: 0 0 42px rgba(56, 139, 253, 0.12);
+}
+
+.cosmic-glow-violet {
+  box-shadow: 0 0 42px rgba(139, 92, 246, 0.12);
+}
+
+.cosmic-starfield {
+  opacity: 0.58;
+  background-image:
+    radial-gradient(circle at 15% 18%, rgba(255, 255, 255, 0.9) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 72% 12%, rgba(183, 232, 255, 0.72) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 38% 64%, rgba(255, 255, 255, 0.55) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 84% 76%, rgba(167, 139, 250, 0.62) 0 1px, transparent 1.5px);
+  background-size: 210px 210px, 320px 320px, 270px 270px, 390px 390px;
+}
+
+.cosmic-starfield::before,
+.cosmic-starfield::after {
+  content: "";
+  position: absolute;
+  inset: -8%;
+  background-image:
+    radial-gradient(circle at 24% 35%, rgba(255, 255, 255, 0.42) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 68% 58%, rgba(98, 168, 255, 0.42) 0 1px, transparent 1.5px);
+  background-size: 430px 430px, 510px 510px;
+  animation: cosmic-drift 36s ease-in-out infinite alternate;
+}
+
+.cosmic-starfield::after {
+  opacity: 0.48;
+  transform: scale(1.08);
+  animation-duration: 52s;
+  animation-direction: alternate-reverse;
+}
+
+.notebook-panel {
+  border: 1px solid var(--cosmic-border);
+  border-radius: 1rem;
+  background: linear-gradient(145deg, rgba(14, 28, 45, 0.94), rgba(6, 14, 27, 0.9));
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.2), inset 0 1px rgba(255, 255, 255, 0.025);
+}
+
+.formula-panel {
+  overflow-x: auto;
+  border: 1px solid rgba(103, 232, 249, 0.16);
+  border-radius: 0.85rem;
+  background: rgba(5, 15, 27, 0.78);
+  padding: 1rem;
+}
+
+.code-panel {
+  border: 1px solid rgba(244, 215, 170, 0.14);
+  border-radius: 1rem;
+  background: linear-gradient(145deg, rgba(24, 25, 28, 0.94), rgba(7, 14, 25, 0.96));
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.focus-ring:focus-visible,
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid var(--cosmic-focus);
+  outline-offset: 3px;
+}
+
+.coordinate-grid {
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.035) 1px, transparent 1px);
+  background-size: 32px 32px;
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.72), transparent 92%);
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.72), transparent 92%);
+}
+
+.stage-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: white;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.stage-title svg {
+  width: 1.15rem;
+  color: var(--cosmic-cyan);
+}
+
+.katex-display {
+  margin: 0.75rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+::selection {
+  background: rgba(103, 232, 249, 0.22);
+  color: white;
+}
+
+@keyframes cosmic-drift {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-1.5rem, 1rem, 0); }
+}
+
+@media (max-width: 767px) {
+  .cosmic-starfield {
+    opacity: 0.38;
+  }
+
+  .cosmic-glass {
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .cosmic-card:hover,
+  .cosmic-button:hover {
+    transform: none;
+  }
+}
+EOF
+
+npm test -- components/AnimatedBackground.test.tsx scripts/tailwind-output.test.ts
+npm run verify
+npm run build:pages
