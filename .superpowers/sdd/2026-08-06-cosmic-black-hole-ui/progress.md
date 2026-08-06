@@ -44,3 +44,11 @@ Baseline head before implementation: `3d2dbabca7c62e89c5840ca8f9f4f05f25a765be`.
 - Deliverables: `CosmicHero`, `UtilityCard`, dashboard composition, Pages-aware hero asset URL, hero/utility CSS, and `vite-env.d.ts`.
 - Review: the image is decorative and has a gradient fallback; search behavior and destination mapping are unchanged; no fake shortcut, account, or notification control was introduced; Math Lab and Formula Workspace remain keyboard-accessible buttons.
 
+## Task 6 — Give Each Course a Distinct Premium Identity
+
+- Status: COMPLETE
+- RED/GREEN evidence: task-runner run `31093677283`; premium CourseCard assertions failed before implementation, then CourseCard/dashboard tests, typecheck, full verify, and Pages build succeeded.
+- Commit: `91753f9009ccaf96592227f1a58714e7974134aa`
+- Deliverables: blue/cyan Math I card, violet/indigo Math II card, typed visual variants, wireframe illustrations, accessible course-progress rings, and CourseCard test coverage.
+- Review: course identity is derived solely from the typed course ID; progress, completion count, recommendation, latest checkpoint, and navigation semantics are preserved.
+
