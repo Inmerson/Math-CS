@@ -20,3 +20,11 @@ Baseline head before implementation: `3d2dbabca7c62e89c5840ca8f9f4f05f25a765be`.
 - Deliverables: cosmic CSS tokens and reusable glass/card/button/glow classes; three-layer restrained background; reduced-motion behavior; `components/AnimatedBackground.test.tsx`.
 - Review: Tailwind 4 import remains first; legacy notebook/formula/code classes remain compatible; background is decorative and contains exactly three marked layers; mobile blur/star intensity is reduced.
 
+## Task 3 — Add Shared Cosmic Primitives and Overall Progress
+
+- Status: COMPLETE
+- RED/GREEN evidence: task-runner run `31092940907`; overall-progress import and progress-ring component each failed before implementation, then targeted tests, typecheck, full verify, and Pages build succeeded.
+- Commit: `b5778332f38de89623ee05030782c439c2775acd`
+- Deliverables: `getOverallProgress`, `CosmicProgressRing`, `CosmicLogoMark`, `CourseVisual`, component test, and ring CSS.
+- Review: overall completion uses all 17 approved topics; percentages are rounded and clamped; decorative SVGs are hidden from assistive technology; course visuals use fixed, typed course identifiers.
+
