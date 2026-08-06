@@ -1,0 +1,77 @@
+name: Complete Math-CS course experience batch
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/execute-batch-2-fix2.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout conversion branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/math-cs-conversion
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: npm ci --include=optional
+
+      - name: Execute corrected course experience scripts
+        run: |
+          set -euo pipefail
+          curl -L --fail https://raw.githubusercontent.com/Inmerson/Math-CS/main/.github/workflows/execute-batch-2.yml -o /tmp/batch.yml
+          python3 - <<'PY'
+          from pathlib import Path
+          lines = Path('/tmp/batch.yml').read_text().splitlines()
+          scripts = []
+          index = 0
+          while index < len(lines):
+              if lines[index] == '        run: |':
+                  index += 1
+                  block = []
+                  while index < len(lines):
+                      line = lines[index]
+                      if line and len(line) - len(line.lstrip(' ')) <= 8:
+                          break
+                      block.append(line[10:] if line.startswith('          ') else '')
+                      index += 1
+                  script = '\n'.join(block).rstrip() + '\n'
+                  script = script.replace("initial={{ opacity: 0, y: reduce ? 0 : 10 }}", "initial={false}")
+                  scripts.append(script)
+                  continue
+              index += 1
+          if len(scripts) != 6:
+              raise SystemExit(f'Expected 6 run blocks, found {len(scripts)}')
+          for number, script in enumerate(scripts, start=1):
+              path = Path(f'/tmp/batch-step-{number}.sh')
+              path.write_text('#!/usr/bin/env bash\n' + script)
+              path.chmod(0o755)
+          PY
+
+          for number in 1 2 3 4 5; do /tmp/batch-step-${number}.sh; done
+
+          cat > views/Sequences3DView.tsx <<'EOF'
+          import React from 'react';
+          import { TrendingUp } from 'lucide-react';
+
+          export const Sequences3DView: React.FC = () => (
+            <section className="notebook-panel p-6" aria-labelledby="sequence-trajectory-title">
+              <div className="flex items-center gap-3">
+                <TrendingUp className="text-cyan-300" aria-hidden="true" />
+                <h2 id="sequence-trajectory-title" className="text-2xl font-bold text-white">Sequence Trajectory</h2>
+              </div>
+              <p className="mt-4 max-w-3xl leading-7 text-slate-300">
+                Indexed values can be represented as points on a coordinate path. The active Math-CS experience uses the bounded Function Explorer for sequence convergence, so this compatibility view contains no domain-specific imagery.
+              </p>
+              <div className="formula-panel mt-5 font-mono text-cyan-100">pₙ = (n, aₙ)</div>
+            </section>
+          );
+          EOF
+
+          /tmp/batch-step-6.sh
