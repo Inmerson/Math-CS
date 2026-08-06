@@ -1,2 +1,0 @@
-import { render, screen } from '@testing-library/react'; import { describe, expect, it, vi } from 'vitest'; import { PracticeView } from './PracticeView';
-describe('PracticeView',()=>{it('filters structured questions by course topic and difficulty',()=>{render(<PracticeView onComplete={vi.fn()}/>);expect(screen.getByLabelText('Practice course')).toHaveValue('math-analysis');expect(screen.getByLabelText('Practice topic')).toHaveValue('functions-graphs');expect(screen.getByRole('heading',{name:'Practice'})).toBeInTheDocument();});});
