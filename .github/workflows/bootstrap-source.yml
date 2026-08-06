@@ -1,0 +1,59 @@
+name: Bootstrap pinned Math-CS source
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/bootstrap-source.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout target seed
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download pinned source archive
+        env:
+          SOURCE_SHA: e9a70f360b72b85a6eaadcd1c44b469dddb3d97e
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 \
+            "https://api.github.com/repos/Inmerson/Math-Biotech-Project/tarball/${SOURCE_SHA}" \
+            -o /tmp/math-biotech.tar.gz
+          mkdir -p /tmp/math-biotech-source
+          tar -xzf /tmp/math-biotech.tar.gz -C /tmp/math-biotech-source
+          SOURCE_DIR="$(find /tmp/math-biotech-source -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          test -n "$SOURCE_DIR"
+          echo "SOURCE_DIR=$SOURCE_DIR" >> "$GITHUB_ENV"
+
+      - name: Replace target working tree with source
+        run: |
+          set -euo pipefail
+          cp .github/workflows/bootstrap-source.yml /tmp/bootstrap-source.yml
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -a "$SOURCE_DIR"/. .
+          mkdir -p .github/workflows
+          cp /tmp/bootstrap-source.yml .github/workflows/bootstrap-source.yml
+          cat > MIGRATION_SOURCE.md <<'EOF'
+          # Migration Source
+
+          Inmerson Math-CS was initialized from `Inmerson/Math-Biotech-Project` at commit `e9a70f360b72b85a6eaadcd1c44b469dddb3d97e` on 2026-08-06.
+
+          The source repository remains the biotechnology-focused product. This repository is the independent computer-science mathematics product.
+          EOF
+
+      - name: Commit imported tree to isolated branch
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C feat/math-cs-conversion
+          git add -A
+          git commit -m "chore: import pinned Math-Biotech source tree"
+          git push --force origin feat/math-cs-conversion
