@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { COURSES } from '../data/courseCatalog';
 import { mathAnalysisCourse } from '../data/courses/mathAnalysis';
 import { createDefaultMathCsState } from './mathCsStorage';
-import { getCourseProgress, getRecommendedTopic, markTopicComplete, recordQuizResult } from './progress';
+import { getCourseProgress, getOverallProgress, getRecommendedTopic, markTopicComplete, recordQuizResult } from './progress';
 
 describe('Math-CS progress', () => {
   it('calculates completion percentage', () => {
@@ -10,6 +11,14 @@ describe('Math-CS progress', () => {
     const stateWithFour = mathAnalysisCourse.topics.slice(0, 4)
       .reduce((state, topic) => markTopicComplete(state, topic.id), emptyState);
     expect(getCourseProgress(stateWithFour, mathAnalysisCourse)).toBe(50);
+  });
+
+  it('calculates overall completion across both courses', () => {
+    const empty = createDefaultMathCsState();
+    expect(getOverallProgress(empty, COURSES)).toBe(0);
+    const firstHalf = COURSES[0].topics.slice(0, 4)
+      .reduce((state, topic) => markTopicComplete(state, topic.id), empty);
+    expect(getOverallProgress(firstHalf, COURSES)).toBe(24);
   });
 
   it('records deterministic quiz percentages and preserves the best result', () => {

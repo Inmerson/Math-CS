@@ -225,3 +225,43 @@ select:focus-visible {
     transform: none;
   }
 }
+
+.cosmic-progress-ring {
+  --ring-color: var(--cosmic-blue);
+  --ring-secondary: var(--cosmic-cyan);
+  --ring-size: 5rem;
+  position: relative;
+  display: grid;
+  width: var(--ring-size);
+  aspect-ratio: 1;
+  place-items: center;
+  isolation: isolate;
+  border-radius: 999px;
+  background: conic-gradient(from -90deg, var(--ring-color) 0 var(--progress), rgba(148, 163, 184, 0.14) var(--progress) 360deg);
+  box-shadow: 0 0 28px color-mix(in srgb, var(--ring-color) 20%, transparent), inset 0 0 0 1px rgba(255,255,255,.06);
+}
+
+.cosmic-progress-ring::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  z-index: -1;
+  border: 1px solid rgba(165, 190, 225, 0.13);
+  border-radius: inherit;
+  background: radial-gradient(circle at 45% 35%, rgba(20, 38, 62, 0.96), rgba(3, 7, 17, 0.98) 72%);
+}
+
+.cosmic-progress-ring > span {
+  color: var(--cosmic-text);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.cosmic-progress-ring--sm { --ring-size: 3.5rem; }
+.cosmic-progress-ring--sm > span { font-size: .76rem; }
+.cosmic-progress-ring--md { --ring-size: 5rem; }
+.cosmic-progress-ring--lg { --ring-size: 7rem; }
+.cosmic-progress-ring--lg > span { font-size: 1.45rem; }
+.cosmic-progress-ring--blue { --ring-color: var(--cosmic-blue); --ring-secondary: var(--cosmic-cyan); }
+.cosmic-progress-ring--violet { --ring-color: var(--cosmic-violet); --ring-secondary: var(--cosmic-indigo); }

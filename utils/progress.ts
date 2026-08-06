@@ -52,6 +52,16 @@ export const getCourseProgress = (state: MathCsState, course: CourseDefinition):
   return Math.round((completed / course.topics.length) * 100);
 };
 
+export const getOverallProgress = (
+  state: MathCsState,
+  courses: readonly CourseDefinition[],
+): number => {
+  const topics = courses.flatMap((course) => course.topics);
+  if (topics.length === 0) return 0;
+  const completed = topics.filter((topic) => state.completedTopicIds.includes(topic.id)).length;
+  return Math.round((completed / topics.length) * 100);
+};
+
 export const getRecommendedTopic = (state: MathCsState, course: CourseDefinition) =>
   course.topics.find((topic) => !state.completedTopicIds.includes(topic.id)
     && topic.prerequisites.every((prerequisite) => state.completedTopicIds.includes(prerequisite)))
