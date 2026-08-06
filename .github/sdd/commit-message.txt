@@ -1,1 +1,2 @@
 fix: harden cosmic UI responsiveness and accessibility
+
