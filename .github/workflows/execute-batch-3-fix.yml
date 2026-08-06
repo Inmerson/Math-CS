@@ -1,0 +1,49 @@
+name: Fix and execute Math-CS interactive labs batch
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/execute-batch-3-fix.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout conversion branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/math-cs-conversion
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: npm ci --include=optional
+
+      - name: Execute corrected laboratory scripts
+        run: |
+          set -euo pipefail
+          curl -L --fail https://raw.githubusercontent.com/Inmerson/Math-CS/main/.github/workflows/execute-batch-3.yml -o /tmp/batch.yml
+          python3 - <<'PY'
+          from pathlib import Path
+          lines = Path('/tmp/batch.yml').read_text().splitlines()
+          scripts=[]; index=0
+          while index < len(lines):
+              if lines[index] == '        run: |':
+                  index += 1; block=[]
+                  while index < len(lines):
+                      line=lines[index]
+                      if line and len(line)-len(line.lstrip(' ')) <= 8: break
+                      block.append(line[10:] if line.startswith('          ') else '')
+                      index += 1
+                  script='\n'.join(block).rstrip()+'\n'
+                  script=script.replace('className="mt-2 w-full accent-cyan-300" type="range"', 'aria-label={parameter.label} className="mt-2 w-full accent-cyan-300" type="range"')
+                  scripts.append(script); continue
+              index += 1
+          if len(scripts) != 5: raise SystemExit(f'Expected 5 run blocks, found {len(scripts)}')
+          for number,script in enumerate(scripts,1):
+              path=Path(f'/tmp/lab-step-{number}.sh'); path.write_text('#!/usr/bin/env bash\n'+script); path.chmod(0o755)
+          PY
+          for script in /tmp/lab-step-*.sh; do "$script"; done
