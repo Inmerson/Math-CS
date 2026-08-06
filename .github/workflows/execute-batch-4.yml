@@ -1,0 +1,295 @@
+name: Execute Math-CS learning tools batch
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/execute-batch-4.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/math-cs-conversion
+          fetch-depth: 0
+      - name: Install dependencies
+        run: |
+          npm cache clean --force
+          npm ci --include=optional
+      - name: Add deterministic grading and quiz runner
+        run: |
+          set -euo pipefail
+          mkdir -p components/quiz
+          cat > utils/quizGrading.ts <<'EOF'
+          import { PracticeQuestion, QuizDefinition } from '../domain/curriculum';
+
+          export interface QuestionGrade {
+            questionId: string;
+            correct: boolean;
+            earned: number;
+            possible: number;
+            feedback: string;
+          }
+
+          export interface QuizGrade {
+            outcomes: QuestionGrade[];
+            score: number;
+            total: number;
+            percentage: number;
+          }
+
+          const numeric = (value: unknown): number | null => {
+            const parsed = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : Number.NaN;
+            return Number.isFinite(parsed) ? parsed : null;
+          };
+
+          const numericArray = (value: unknown): number[] | null => {
+            if (Array.isArray(value)) {
+              const result = value.map(numeric);
+              return result.every((item): item is number => item !== null) ? result : null;
+            }
+            if (typeof value !== 'string') return null;
+            const cleaned = value.replace(/[\[\]()]/g, ' ').trim();
+            if (!cleaned) return null;
+            const result = cleaned.split(/[ ,;]+/).filter(Boolean).map(numeric);
+            return result.every((item): item is number => item !== null) ? result : null;
+          };
+
+          const numericMatrix = (value: unknown): number[][] | null => {
+            if (Array.isArray(value) && value.every(Array.isArray)) {
+              const rows = value.map(numericArray);
+              return rows.every((row): row is number[] => row !== null) ? rows : null;
+            }
+            if (typeof value !== 'string') return null;
+            const rows = value.trim().split(/\n|;/).filter(Boolean).map(numericArray);
+            return rows.length && rows.every((row): row is number[] => row !== null) ? rows : null;
+          };
+
+          const close = (a: number, b: number, tolerance: number) => Math.abs(a - b) <= tolerance;
+          const compareVector = (actual: number[] | null, expected: number[], tolerance: number) =>
+            actual !== null && actual.length === expected.length && actual.every((value, index) => close(value, expected[index], tolerance));
+          const compareMatrix = (actual: number[][] | null, expected: number[][], tolerance: number) =>
+            actual !== null && actual.length === expected.length && actual.every((row, rowIndex) => compareVector(row, expected[rowIndex], tolerance));
+
+          export const gradeQuestion = (question: PracticeQuestion, response: unknown): QuestionGrade => {
+            const tolerance = question.tolerance ?? 0.001;
+            let correct = false;
+            if (question.kind === 'multiple-choice') correct = typeof response === 'string' && response === question.answer;
+            if (question.kind === 'numeric') {
+              const actual = numeric(response);
+              correct = actual !== null && typeof question.answer === 'number' && close(actual, question.answer, tolerance);
+            }
+            if (question.kind === 'ordered-steps') {
+              const actual = Array.isArray(response) ? response.map(String) : typeof response === 'string' ? response.split(/\s*>\s*/).filter(Boolean) : [];
+              const expected = Array.isArray(question.answer) ? question.answer.map(String) : [];
+              correct = actual.length === expected.length && actual.every((step, index) => step === expected[index]);
+            }
+            if (question.kind === 'vector') correct = Array.isArray(question.answer) && !Array.isArray(question.answer[0]) && compareVector(numericArray(response), question.answer as number[], tolerance);
+            if (question.kind === 'matrix') correct = Array.isArray(question.answer) && Array.isArray(question.answer[0]) && compareMatrix(numericMatrix(response), question.answer as number[][], tolerance);
+            return { questionId: question.id, correct, earned: correct ? 1 : 0, possible: 1, feedback: correct ? 'Correct.' : question.explanation };
+          };
+
+          export const gradeQuiz = (quiz: QuizDefinition, responses: Record<string, unknown>): QuizGrade => {
+            const outcomes = quiz.questions.map((question) => gradeQuestion(question, responses[question.id]));
+            const score = outcomes.reduce((sum, outcome) => sum + outcome.earned, 0);
+            const total = outcomes.reduce((sum, outcome) => sum + outcome.possible, 0);
+            return { outcomes, score, total, percentage: total ? Math.round((score / total) * 100) : 0 };
+          };
+          EOF
+
+          cat > utils/quizGrading.test.ts <<'EOF'
+          import { describe, expect, it } from 'vitest';
+          import { PracticeQuestion, QuizDefinition } from '../domain/curriculum';
+          import { gradeQuestion, gradeQuiz } from './quizGrading';
+          const q = (kind: PracticeQuestion['kind'], answer: PracticeQuestion['answer'], tolerance?: number): PracticeQuestion => ({ id: kind, kind, prompt: kind, answer, tolerance, explanation: 'Review the worked example.' });
+          describe('quiz grading', () => {
+            it('grades all supported response kinds', () => {
+              expect(gradeQuestion(q('multiple-choice','A'),'A').correct).toBe(true);
+              expect(gradeQuestion(q('numeric',2,0.1),2.1).correct).toBe(true);
+              expect(gradeQuestion(q('ordered-steps',['first','second']),['second','first']).correct).toBe(false);
+              expect(gradeQuestion(q('vector',[1,2],0.01),'1, 2.005').correct).toBe(true);
+              expect(gradeQuestion(q('matrix',[[1,2],[3,4]],0.01),'1 2; 3').correct).toBe(false);
+              expect(gradeQuestion(q('numeric',2),undefined).correct).toBe(false);
+            });
+            it('calculates deterministic integer percentages', () => {
+              const quiz: QuizDefinition={id:'quiz',title:'Quiz',questions:[q('multiple-choice','A'),q('numeric',2),q('vector',[1,2])]};
+              expect(gradeQuiz(quiz,{ 'multiple-choice':'A', numeric:'0', vector:'1 2' })).toMatchObject({score:2,total:3,percentage:67});
+            });
+          });
+          EOF
+
+          cat > components/quiz/QuizRunner.tsx <<'EOF'
+          import React, { useState } from 'react';
+          import { CourseId, QuizDefinition, TopicId } from '../../domain/curriculum';
+          import { QuizGrade, gradeQuiz } from '../../utils/quizGrading';
+
+          export interface QuizSubmission extends QuizGrade { courseId: CourseId; topicId: TopicId; }
+          interface QuizRunnerProps { courseId: CourseId; topicId: TopicId; quiz: QuizDefinition; onComplete: (result: QuizSubmission) => void; }
+
+          export const QuizRunner: React.FC<QuizRunnerProps> = ({ courseId, topicId, quiz, onComplete }) => {
+            const [responses,setResponses]=useState<Record<string,unknown>>({});
+            const [result,setResult]=useState<QuizGrade|null>(null);
+            const answer = (id:string,value:unknown) => { if(!result) setResponses((current)=>({...current,[id]:value})); };
+            const submit = (event:React.FormEvent) => { event.preventDefault(); if(result) return; const grade=gradeQuiz(quiz,responses); setResult(grade); onComplete({...grade,courseId,topicId}); };
+            return <form onSubmit={submit} className="space-y-5"><div><h3 className="font-semibold text-white">{quiz.title}</h3><p className="mt-1 text-sm text-slate-400">Answer all you can; unanswered questions receive zero points.</p></div>{quiz.questions.map((question,index)=><fieldset key={question.id} className="rounded-xl border border-white/10 p-4" disabled={Boolean(result)}><legend className="px-1 font-medium text-white">{index+1}. {question.prompt}</legend>{question.kind==='multiple-choice' ? <div className="mt-3 space-y-2">{question.choices?.map((choice)=><label key={choice} className="flex cursor-pointer gap-3 rounded-lg border border-white/8 p-3 text-sm text-slate-200"><input type="radio" name={question.id} value={choice} checked={responses[question.id]===choice} onChange={()=>answer(question.id,choice)} />{choice}</label>)}</div> : <label className="mt-3 block text-sm text-slate-400">Your answer<input aria-label={`Answer for question ${index+1}`} className="focus-ring mt-2 w-full rounded-lg border border-white/10 bg-slate-950 p-3 text-white" value={String(responses[question.id]??'')} onChange={(event)=>answer(question.id,event.target.value)} placeholder={question.kind==='matrix'?'Rows separated by semicolons':'Enter a value'} /></label>}{result&&<p className={`mt-3 text-sm ${result.outcomes[index].correct?'text-emerald-300':'text-amber-200'}`}>{result.outcomes[index].feedback}</p>}</fieldset>)}<button type="submit" disabled={Boolean(result)} className="focus-ring rounded-xl bg-cyan-300 px-5 py-3 font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-60">{result?'Submitted':'Submit answers'}</button>{result&&<p role="status" className="rounded-xl border border-cyan-300/20 bg-cyan-300/8 p-4 font-semibold text-cyan-100">Score: {result.score}/{result.total} · {result.percentage}%</p>}</form>;
+          };
+          EOF
+
+          cat > components/quiz/QuizRunner.test.tsx <<'EOF'
+          import { fireEvent, render, screen } from '@testing-library/react'; import { describe, expect, it, vi } from 'vitest'; import { QuizRunner } from './QuizRunner';
+          const quiz={id:'q',title:'Checkpoint',questions:[{id:'one',kind:'multiple-choice' as const,prompt:'Choose A',choices:['A','B'],answer:'A',explanation:'A is correct.'}]};
+          describe('QuizRunner',()=>{it('submits once with identifiers and feedback',()=>{const complete=vi.fn();render(<QuizRunner courseId="math-analysis" topicId="limits" quiz={quiz} onComplete={complete}/>);fireEvent.click(screen.getByLabelText('A'));fireEvent.click(screen.getByRole('button',{name:'Submit answers'}));expect(complete).toHaveBeenCalledWith(expect.objectContaining({courseId:'math-analysis',topicId:'limits',percentage:100}));expect(screen.getByRole('button',{name:'Submitted'})).toBeDisabled();expect(screen.getByText('Correct.')).toBeInTheDocument();});});
+          EOF
+
+      - name: Add Practice and Exams
+        run: |
+          set -euo pipefail
+          cat > views/PracticeView.tsx <<'EOF'
+          import React, { useMemo, useState } from 'react';
+          import { CourseId, TopicId } from '../domain/curriculum';
+          import { COURSES, getCourse } from '../data/courseCatalog';
+          import { QuizRunner, QuizSubmission } from '../components/quiz/QuizRunner';
+          interface PracticeViewProps { onComplete: (result: QuizSubmission) => void; }
+          export const PracticeView:React.FC<PracticeViewProps>=({onComplete})=>{const[courseId,setCourseId]=useState<CourseId>('math-analysis');const course=getCourse(courseId)!;const[topicId,setTopicId]=useState<TopicId>(course.topics[0].id);const[difficulty,setDifficulty]=useState<1|2|3>(2);React.useEffect(()=>setTopicId(getCourse(courseId)!.topics[0].id),[courseId]);const topic=getCourse(courseId)!.topics.find((item)=>item.id===topicId)!;const quiz=useMemo(()=>({...topic.quiz,id:`practice-${topic.id}`,title:`${topic.title} guided practice`,questions:[...topic.practiceQuestions,...topic.quiz.questions].filter((question,index,array)=>array.findIndex((item)=>item.id===question.id)===index).slice(0,Math.max(2,difficulty+1))}),[topic,difficulty]);return <div className="mx-auto max-w-4xl"><h1 className="text-3xl font-bold text-white">Practice</h1><div className="notebook-panel mt-5 grid gap-4 p-4 sm:grid-cols-3"><label className="text-sm text-slate-300">Course<select aria-label="Practice course" className="focus-ring mt-2 w-full rounded-lg border border-white/10 bg-slate-950 p-2" value={courseId} onChange={(e)=>setCourseId(e.target.value as CourseId)}>{COURSES.map((item)=><option key={item.id} value={item.id}>{item.shortTitle}</option>)}</select></label><label className="text-sm text-slate-300">Topic<select aria-label="Practice topic" className="focus-ring mt-2 w-full rounded-lg border border-white/10 bg-slate-950 p-2" value={topicId} onChange={(e)=>setTopicId(e.target.value as TopicId)}>{getCourse(courseId)!.topics.map((item)=><option key={item.id} value={item.id}>{item.title}</option>)}</select></label><label className="text-sm text-slate-300">Difficulty<select aria-label="Practice difficulty" className="focus-ring mt-2 w-full rounded-lg border border-white/10 bg-slate-950 p-2" value={difficulty} onChange={(e)=>setDifficulty(Number(e.target.value) as 1|2|3)}><option value={1}>Foundation</option><option value={2}>Standard</option><option value={3}>Challenge</option></select></label></div><div className="notebook-panel mt-5 p-5"><QuizRunner key={`${courseId}-${topicId}-${difficulty}`} courseId={courseId} topicId={topicId} quiz={quiz} onComplete={onComplete}/></div></div>;};
+          EOF
+
+          cat > views/ExamsView.tsx <<'EOF'
+          import React, { useMemo, useState } from 'react';
+          import { CourseId, QuizDefinition, TopicId } from '../domain/curriculum';
+          import { COURSES } from '../data/courseCatalog';
+          import { QuizRunner, QuizSubmission } from '../components/quiz/QuizRunner';
+          interface ExamsViewProps { onComplete:(result:QuizSubmission)=>void; }
+          type ExamMode='math-analysis'|'linear-algebra-geometry'|'combined';
+          const createExam=(mode:ExamMode):{courseId:CourseId;topicId:TopicId;quiz:QuizDefinition}=>{const courses=mode==='combined'?COURSES:COURSES.filter((course)=>course.id===mode);const questions=courses.flatMap((course)=>course.topics.map((topic)=>topic.quiz.questions[0])).slice(0,mode==='combined'?12:8);return{courseId:mode==='linear-algebra-geometry'?'linear-algebra-geometry':'math-analysis',topicId:mode==='linear-algebra-geometry'?'vectors':'functions-graphs',quiz:{id:`${mode}-exam`,title:mode==='combined'?'Combined review exam':`${courses[0].shortTitle} mock exam`,questions}};};
+          export const ExamsView:React.FC<ExamsViewProps>=({onComplete})=>{const[mode,setMode]=useState<ExamMode>('math-analysis');const exam=useMemo(()=>createExam(mode),[mode]);return <div className="mx-auto max-w-4xl"><h1 className="text-3xl font-bold text-white">Exams</h1><p className="mt-3 text-slate-300">Fixed question IDs make every score reproducible and comparable by topic.</p><div className="mt-5 flex flex-wrap gap-2">{(['math-analysis','linear-algebra-geometry','combined'] as const).map((item)=><button key={item} className={`focus-ring rounded-xl px-4 py-2 text-sm font-semibold ${mode===item?'bg-cyan-300 text-slate-950':'notebook-panel'}`} onClick={()=>setMode(item)}>{item==='math-analysis'?'Math I':item==='linear-algebra-geometry'?'Math II':'Combined review'}</button>)}</div><div className="notebook-panel mt-5 p-5"><QuizRunner key={mode} courseId={exam.courseId} topicId={exam.topicId} quiz={exam.quiz} onComplete={onComplete}/></div></div>;};
+          EOF
+
+          cat > views/PracticeView.test.tsx <<'EOF'
+          import { render, screen } from '@testing-library/react'; import { describe, expect, it, vi } from 'vitest'; import { PracticeView } from './PracticeView';
+          describe('PracticeView',()=>{it('filters structured questions by course topic and difficulty',()=>{render(<PracticeView onComplete={vi.fn()}/>);expect(screen.getByLabelText('Practice course')).toHaveValue('math-analysis');expect(screen.getByLabelText('Practice topic')).toHaveValue('functions-graphs');expect(screen.getByRole('heading',{name:'Practice'})).toBeInTheDocument();});});
+          EOF
+          cat > views/ExamsView.test.tsx <<'EOF'
+          import { fireEvent, render, screen } from '@testing-library/react'; import { describe, expect, it, vi } from 'vitest'; import { ExamsView } from './ExamsView';
+          describe('ExamsView',()=>{it('offers two course exams and a combined review',()=>{render(<ExamsView onComplete={vi.fn()}/>);expect(screen.getByRole('button',{name:'Math I'})).toBeInTheDocument();expect(screen.getByRole('button',{name:'Math II'})).toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'Combined review'}));expect(screen.getByText('Combined review exam')).toBeInTheDocument();});});
+          EOF
+
+          cat > views/ExercisesView.tsx <<'EOF'
+          export { PracticeView as HomeworkView } from './PracticeView';
+          EOF
+          cat > views/FinalExamView.tsx <<'EOF'
+          export { ExamsView as FinalExamView } from './ExamsView';
+          EOF
+          cat > views/ExamAnalysisView.tsx <<'EOF'
+          export { ProgressView as ExamAnalysisView } from './ProgressView';
+          EOF
+          cat > data/examQuestions.ts <<'EOF'
+          import { COURSES } from './courseCatalog';
+          export const EXAM_QUESTIONS = COURSES.flatMap((course)=>course.topics.flatMap((topic)=>topic.quiz.questions));
+          export default EXAM_QUESTIONS;
+          EOF
+
+      - name: Add progress formula workspace and scoped assistant
+        run: |
+          set -euo pipefail
+          cat > views/ProgressView.tsx <<'EOF'
+          import React from 'react';
+          import { COURSES } from '../data/courseCatalog';
+          import { MathCsState } from '../utils/mathCsStorage';
+          import { getCourseProgress, getRecommendedTopic } from '../utils/progress';
+          interface ProgressViewProps{state:MathCsState;}
+          export const ProgressView:React.FC<ProgressViewProps>=({state})=>{const weak=state.quizResults.filter((result)=>result.percentage<70);return <div className="mx-auto max-w-5xl"><h1 className="text-3xl font-bold text-white">Progress</h1><div className="mt-6 grid gap-5 md:grid-cols-2">{COURSES.map((course)=>{const progress=getCourseProgress(state,course);const latest=state.quizResults.filter((result)=>result.courseId===course.id).at(-1);return <section key={course.id} className="notebook-panel p-5"><p className="text-xs font-bold uppercase tracking-[.18em] text-cyan-300">{course.shortTitle}</p><h2 className="mt-2 text-xl font-bold text-white">{course.title}</h2><p className="mt-4 text-3xl font-bold text-white">{progress}%</p><div className="mt-3 h-2 rounded-full bg-white/8"><div className="h-full rounded-full bg-cyan-300" style={{width:`${progress}%`}}/></div><dl className="mt-5 space-y-3 text-sm"><div><dt className="text-slate-500">Latest score</dt><dd className="text-slate-100">{latest?`${latest.percentage}%`:'No attempts'}</dd></div><div><dt className="text-slate-500">Recommended next</dt><dd className="text-slate-100">{getRecommendedTopic(state,course)?.title??'Course review'}</dd></div></dl></section>;})}</div><section className="notebook-panel mt-5 p-5"><h2 className="text-xl font-bold text-white">Review queue</h2>{weak.length?<ul className="mt-4 space-y-2">{weak.map((result)=><li key={`${result.courseId}-${result.topicId}`} className="rounded-lg border border-amber-300/15 p-3 text-sm text-amber-100">{result.topicId.replaceAll('-',' ')} · {result.percentage}%</li>)}</ul>:<p className="mt-3 text-slate-400">No weak-topic results yet. Complete a checkpoint to build the review queue.</p>}</section></div>;};
+          EOF
+
+          cat > views/FormulaWorkspaceView.tsx <<'EOF'
+          import React from 'react';
+          import { Bookmark, Trash2 } from 'lucide-react';
+          import { COURSES } from '../data/courseCatalog';
+          import { MathCsState, SavedFormula } from '../utils/mathCsStorage';
+          import { MathRenderer } from '../components/MathRenderer';
+          interface FormulaWorkspaceViewProps{state:MathCsState;onSave:(formula:SavedFormula)=>void;onRemove:(id:string)=>void;onNote:(id:string,note:string)=>void;}
+          export const FormulaWorkspaceView:React.FC<FormulaWorkspaceViewProps>=({state,onSave,onRemove,onNote})=><div className="mx-auto max-w-5xl"><h1 className="text-3xl font-bold text-white">Formula Workspace</h1><p className="mt-3 text-slate-300">Save curriculum formulas by reference; local notes are plain text and limited to 500 characters.</p><div className="mt-6 space-y-8">{COURSES.map((course)=><section key={course.id}><h2 className="text-xl font-bold text-white">{course.shortTitle} · {course.title}</h2><div className="mt-4 grid gap-4 lg:grid-cols-2">{course.topics.flatMap((topic)=>topic.formulas.map((formula)=>{const saved=state.savedFormulas.find((item)=>item.formulaId===formula.id);return <article key={formula.id} className="notebook-panel p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-xs uppercase tracking-wider text-slate-500">{topic.title}</p><h3 className="mt-1 font-semibold text-white">{formula.label}</h3></div><button aria-label={saved?`Remove ${formula.label}`:`Save ${formula.label}`} className="focus-ring rounded-lg border border-white/10 p-2" onClick={()=>saved?onRemove(formula.id):onSave({formulaId:formula.id,courseId:course.id,topicId:topic.id,note:''})}>{saved?<Trash2 size={17}/>:<Bookmark size={17}/>}</button></div><div className="formula-panel mt-4"><MathRenderer expression={formula.latex}/></div><p className="mt-3 text-sm text-slate-400">{formula.explanation}</p>{saved&&<label className="mt-4 block text-sm text-slate-300">Local note<textarea aria-label={`Note for ${formula.label}`} maxLength={500} value={saved.note} onChange={(event)=>onNote(formula.id,event.target.value.slice(0,500))} className="focus-ring mt-2 w-full rounded-lg border border-white/10 bg-slate-950 p-3 text-white" rows={3}/><span className="mt-1 block text-right text-xs text-slate-500">{saved.note.length}/500</span></label>}</article>;}))}</div></section>)}</div></div>;
+          EOF
+
+          cat > services/geminiService.ts <<'EOF'
+          export const MATH_CS_SYSTEM_INSTRUCTION = `You are the Math-CS Assistant. Explain only Mathematical Analysis and Linear Algebra & Geometry from the current Inmerson Math-CS catalog. Use the app notation, diagnose the learner's attempt, give one hint at a time, and reveal a full solution only after an attempt or an explicit request. Suggest only existing topics or the Function Explorer, Matrix Lab, or Vector & Geometry Lab. Say clearly when a request is outside this scope. Never create curriculum records.`;
+          export const getLocalMathSuggestion=(message:string)=>{const text=message.toLowerCase();if(text.includes('matrix')||text.includes('determinant'))return 'Open Math II → Matrices or Matrix Lab. Start by checking dimensions and the requested operation.';if(text.includes('vector')||text.includes('plane'))return 'Open Math II → Vectors or Vector & Geometry Lab. Identify coordinates, direction, and the required product.';if(text.includes('limit')||text.includes('derivative')||text.includes('integral')||text.includes('function'))return 'Open Math I and the Function Explorer. State the function, the point or interval, and your first attempted step.';return 'This local assistant covers Mathematical Analysis and Linear Algebra & Geometry. Name the current topic and show your first attempted step.';};
+          EOF
+
+          cat > views/AIChatView.tsx <<'EOF'
+          import React,{useState}from'react';import{Send,Sparkles}from'lucide-react';import{AppDestination}from'../types';import{getLocalMathSuggestion,MATH_CS_SYSTEM_INSTRUCTION}from'../services/geminiService';
+          interface AIChatViewProps{context?:AppDestination;onNavigate?:(destination:AppDestination)=>void;}
+          export const AIChatView:React.FC<AIChatViewProps>=({context})=>{const[input,setInput]=useState('');const[messages,setMessages]=useState<{role:'user'|'assistant';text:string}[]>([{role:'assistant',text:'I am the Math-CS Assistant. I support Mathematical Analysis and Linear Algebra & Geometry with one step at a time. Show your attempt, and I will help diagnose the next step.'}]);const send=(event:React.FormEvent)=>{event.preventDefault();const message=input.trim();if(!message)return;setMessages((current)=>[...current,{role:'user',text:message},{role:'assistant',text:getLocalMathSuggestion(message)}]);setInput('');};return <div className="mx-auto max-w-4xl"><div className="flex items-center gap-3"><Sparkles className="text-cyan-300"/><div><h1 className="text-3xl font-bold text-white">Math-CS Assistant</h1><p className="mt-1 text-sm text-slate-400">Local bounded guidance{context?.topicId?` · active topic: ${context.topicId.replaceAll('-',' ')}`:''}</p></div></div><div className="notebook-panel mt-5 space-y-3 p-5" aria-live="polite">{messages.map((message,index)=><div key={index} className={`max-w-[85%] rounded-xl p-3 text-sm leading-6 ${message.role==='assistant'?'bg-cyan-300/8 text-cyan-50':'ml-auto bg-white/8 text-white'}`}>{message.text}</div>)}</div><form onSubmit={send} className="mt-4 flex gap-2"><label className="sr-only" htmlFor="assistant-message">Your mathematics question</label><input id="assistant-message" value={input} onChange={(event)=>setInput(event.target.value)} className="focus-ring min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-950 p-3 text-white" placeholder="Show your attempted step…"/><button className="focus-ring rounded-xl bg-cyan-300 px-4 text-slate-950" aria-label="Send message"><Send size={18}/></button></form><details className="mt-4 text-xs text-slate-500"><summary>Assistant scope</summary><p className="mt-2">{MATH_CS_SYSTEM_INSTRUCTION}</p></details></div>;};
+          EOF
+
+          cat > views/CheatSheetView.tsx <<'EOF'
+          export { FormulaWorkspaceView as CheatSheetView } from './FormulaWorkspaceView';
+          EOF
+
+          cat > views/ProgressView.test.tsx <<'EOF'
+          import { render,screen } from '@testing-library/react';import{describe,expect,it}from'vitest';import{createDefaultMathCsState}from'../utils/mathCsStorage';import{markTopicComplete,recordQuizResult}from'../utils/progress';import{ProgressView}from'./ProgressView';describe('ProgressView',()=>{it('renders deterministic percentages scores and review queue',()=>{let state=markTopicComplete(createDefaultMathCsState(),'functions-graphs');state=recordQuizResult(state,'math-analysis','limits',1,2,'2026-08-06T00:00:00Z');render(<ProgressView state={state}/>);expect(screen.getByText('13%')).toBeInTheDocument();expect(screen.getByText('50%')).toBeInTheDocument();expect(screen.getByText(/limits · 50%/)).toBeInTheDocument();});});
+          EOF
+          cat > views/FormulaWorkspaceView.test.tsx <<'EOF'
+          import{fireEvent,render,screen}from'@testing-library/react';import{describe,expect,it,vi}from'vitest';import{createDefaultMathCsState}from'../utils/mathCsStorage';import{FormulaWorkspaceView}from'./FormulaWorkspaceView';describe('FormulaWorkspaceView',()=>{it('saves a curriculum formula and supports local note editing',()=>{const save=vi.fn();render(<FormulaWorkspaceView state={createDefaultMathCsState()} onSave={save} onRemove={vi.fn()} onNote={vi.fn()}/>);fireEvent.click(screen.getByLabelText('Save Function value'));expect(save).toHaveBeenCalledWith(expect.objectContaining({formulaId:'functions-graphs-formula'}));});});
+          EOF
+          cat > views/__tests__/AIChatView.test.tsx <<'EOF'
+          import{render,screen}from'@testing-library/react';import{describe,expect,it}from'vitest';import{AIChatView}from'../AIChatView';describe('AIChatView',()=>{it('introduces the bounded Math-CS Assistant',()=>{render(<AIChatView/>);expect(screen.getByRole('heading',{name:'Math-CS Assistant'})).toBeInTheDocument();expect(screen.getByText(/Mathematical Analysis and Linear Algebra & Geometry/)).toBeInTheDocument();expect(document.body.textContent).not.toMatch(/biotech|DNA|population|radioactive|differential equations/i);});});
+          EOF
+
+      - name: Connect learning tools to App and lesson flow
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          learning=Path('components/course/LearningFlow.tsx').read_text()
+          learning=learning.replace("import { MathRenderer } from '../MathRenderer';", "import { MathRenderer } from '../MathRenderer';\nimport { QuizRunner, QuizSubmission } from '../quiz/QuizRunner';")
+          learning=learning.replace("interface LearningFlowProps { topic: TopicDefinition; onOpenLab: () => void; }", "interface LearningFlowProps { topic: TopicDefinition; onOpenLab: () => void; onQuizComplete: (result: QuizSubmission) => void; }")
+          learning=learning.replace("export const LearningFlow: React.FC<LearningFlowProps> = ({ topic, onOpenLab }) => (", "export const LearningFlow: React.FC<LearningFlowProps> = ({ topic, onOpenLab, onQuizComplete }) => (")
+          old='<section className="notebook-panel p-5" aria-labelledby="stage-quiz"><h2 id="stage-quiz" className="stage-title"><Trophy />{stages[4]}</h2><p className="mt-3 font-medium text-white">{topic.quiz.title}</p><p className="mt-1 text-sm text-slate-400">{topic.quiz.questions.length} questions. Quiz runner activates in the assessment stage.</p><button className="mt-4 cursor-not-allowed rounded-lg border border-white/10 px-4 py-2 text-sm text-slate-500" disabled>Start checkpoint</button></section>'
+          new='<section className="notebook-panel p-5" aria-labelledby="stage-quiz"><h2 id="stage-quiz" className="stage-title"><Trophy />{stages[4]}</h2><div className="mt-4"><QuizRunner courseId={topic.courseId} topicId={topic.id} quiz={topic.quiz} onComplete={onQuizComplete} /></div></section>'
+          if old not in learning: raise SystemExit('LearningFlow quiz block not found')
+          Path('components/course/LearningFlow.tsx').write_text(learning.replace(old,new))
+
+          lesson=Path('views/LessonWorkspaceView.tsx').read_text()
+          lesson=lesson.replace("import { LearningFlow } from '../components/course/LearningFlow';", "import { LearningFlow } from '../components/course/LearningFlow';\nimport { QuizSubmission } from '../components/quiz/QuizRunner';")
+          lesson=lesson.replace("interface LessonWorkspaceViewProps { courseId: CourseId; topicId: TopicId; state: MathCsState; onNavigate: (destination: AppDestination) => void; onComplete: (topicId: TopicId) => void; }", "interface LessonWorkspaceViewProps { courseId: CourseId; topicId: TopicId; state: MathCsState; onNavigate: (destination: AppDestination) => void; onComplete: (topicId: TopicId) => void; onQuizComplete: (result: QuizSubmission) => void; }")
+          lesson=lesson.replace("export const LessonWorkspaceView: React.FC<LessonWorkspaceViewProps> = ({ courseId, topicId, state, onNavigate, onComplete }) => {", "export const LessonWorkspaceView: React.FC<LessonWorkspaceViewProps> = ({ courseId, topicId, state, onNavigate, onComplete, onQuizComplete }) => {")
+          lesson=lesson.replace('<LearningFlow topic={topic} onOpenLab={() => onNavigate({ section: \'math-lab\', courseId, topicId, labId })} />','<LearningFlow topic={topic} onOpenLab={() => onNavigate({ section: \'math-lab\', courseId, topicId, labId })} onQuizComplete={onQuizComplete} />')
+          Path('views/LessonWorkspaceView.tsx').write_text(lesson)
+
+          app=Path('App.tsx').read_text()
+          app=app.replace("import { MathLabView } from './views/MathLabView';", "import { MathLabView } from './views/MathLabView';\nimport { PracticeView } from './views/PracticeView';\nimport { ExamsView } from './views/ExamsView';\nimport { ProgressView } from './views/ProgressView';\nimport { FormulaWorkspaceView } from './views/FormulaWorkspaceView';\nimport { AIChatView } from './views/AIChatView';\nimport { QuizSubmission } from './components/quiz/QuizRunner';")
+          app=app.replace("import { markTopicComplete } from './utils/progress';", "import { markTopicComplete, recordQuizResult, removeFormula, saveFormula, saveFormulaNote } from './utils/progress';")
+          app=app.replace("  const renderContent = () => {", "  const handleQuiz = (result: QuizSubmission) => {\n    const withResult = recordQuizResult(state, result.courseId, result.topicId, result.score, result.total);\n    updateState(result.percentage >= 70 ? markTopicComplete(withResult, result.topicId) : withResult);\n  };\n\n  const renderContent = () => {")
+          app=app.replace("case 'lesson': return <LessonWorkspaceView courseId={destination.courseId!} topicId={destination.topicId!} state={state} onNavigate={navigate} onComplete={(topicId) => updateState(markTopicComplete(state, topicId))} />;", "case 'lesson': return <LessonWorkspaceView courseId={destination.courseId!} topicId={destination.topicId!} state={state} onNavigate={navigate} onComplete={(topicId) => updateState(markTopicComplete(state, topicId))} onQuizComplete={handleQuiz} />;")
+          app=app.replace("case 'practice': return <Placeholder title=\"Practice\" description=\"Topic-filtered guided practice will use the same deterministic curriculum question bank.\" />;", "case 'practice': return <PracticeView onComplete={handleQuiz} />;")
+          app=app.replace("case 'exams': return <Placeholder title=\"Exams\" description=\"Course checkpoints and mock examinations will report results by topic.\" />;", "case 'exams': return <ExamsView onComplete={handleQuiz} />;")
+          app=app.replace("case 'progress': return <Placeholder title=\"Progress\" description=\"Completion, mastery, and review recommendations remain local to this device.\" />;", "case 'progress': return <ProgressView state={state} />;")
+          app=app.replace("case 'formulas': return <Placeholder title=\"Formula Workspace\" description=\"Saved formulas and personal notes will appear here.\" />;", "case 'formulas': return <FormulaWorkspaceView state={state} onSave={(formula) => updateState(saveFormula(state, formula))} onRemove={(id) => updateState(removeFormula(state, id))} onNote={(id, note) => updateState(saveFormulaNote(state, id, note))} />;")
+          app=app.replace("case 'assistant': return <Placeholder title=\"Math Assistant\" description=\"The contextual assistant will provide bounded, stepwise hints for the active topic.\" />;", "case 'assistant': return <AIChatView context={destination} onNavigate={navigate} />;")
+          app=app.replace("\nconst Placeholder: React.FC<{ title: string; description: string }> = ({ title, description }) => <div className=\"mx-auto max-w-4xl\"><h1 className=\"text-3xl font-bold text-white\">{title}</h1><div className=\"notebook-panel mt-5 p-6\"><p className=\"leading-7 text-slate-300\">{description}</p></div></div>;\n", "\n")
+          Path('App.tsx').write_text(app)
+          PY
+
+          python3 - <<'PY'
+          from pathlib import Path
+          for path in ['views/LessonWorkspaceView.test.tsx']:
+              text=Path(path).read_text()
+              text=text.replace('onComplete={vi.fn()} />','onComplete={vi.fn()} onQuizComplete={vi.fn()} />')
+              Path(path).write_text(text)
+          PY
+
+      - name: Verify and commit learning tools
+        run: |
+          set -euo pipefail
+          npm test -- utils/quizGrading.test.ts components/quiz/QuizRunner.test.tsx views/PracticeView.test.tsx views/ExamsView.test.tsx views/FormulaWorkspaceView.test.tsx views/ProgressView.test.tsx views/__tests__/AIChatView.test.tsx
+          npm run verify
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: add assessments progress formulas and assistant"
+          git push origin feat/math-cs-conversion
