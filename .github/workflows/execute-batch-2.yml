@@ -1,0 +1,521 @@
+name: Execute Math-CS navigation and course experience batch
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/execute-batch-2.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout conversion branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/math-cs-conversion
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: npm ci --include=optional
+
+      - name: Add destination types and catalog navigation
+        run: |
+          set -euo pipefail
+          cat >> types.ts <<'EOF'
+
+          export type AppSection =
+            | 'dashboard'
+            | 'course'
+            | 'lesson'
+            | 'math-lab'
+            | 'practice'
+            | 'exams'
+            | 'progress'
+            | 'formulas'
+            | 'assistant';
+
+          export type MathLabId = 'function' | 'matrix' | 'vector-geometry';
+
+          export interface AppDestination {
+            section: AppSection;
+            courseId?: import('./domain/curriculum').CourseId;
+            topicId?: import('./domain/curriculum').TopicId;
+            labId?: MathLabId;
+          }
+          EOF
+
+          cat > data/learningCatalog.ts <<'EOF'
+          import { CourseDefinition, TopicDefinition } from '../domain/curriculum';
+          import { AppDestination } from '../types';
+          import { COURSES, searchTopics } from './courseCatalog';
+
+          export interface LearningDestination {
+            course: CourseDefinition;
+            topic: TopicDefinition;
+            destination: AppDestination;
+          }
+
+          export const LEARNING_DESTINATIONS: LearningDestination[] = COURSES.flatMap((course) =>
+            course.topics.map((topic) => ({
+              course,
+              topic,
+              destination: { section: 'lesson', courseId: course.id, topicId: topic.id },
+            })),
+          );
+
+          export const searchLearningDestinations = (query: string, limit = 6): LearningDestination[] =>
+            searchTopics(query, limit).map(({ course, topic }) => ({
+              course,
+              topic,
+              destination: { section: 'lesson', courseId: course.id, topicId: topic.id },
+            }));
+          EOF
+
+          cat > data/learningCatalog.test.ts <<'EOF'
+          import { describe, expect, it } from 'vitest';
+          import { LEARNING_DESTINATIONS, searchLearningDestinations } from './learningCatalog';
+
+          describe('learning catalog navigation', () => {
+            it('indexes only the two approved course paths', () => {
+              expect(LEARNING_DESTINATIONS).toHaveLength(17);
+              expect(JSON.stringify(LEARNING_DESTINATIONS)).not.toMatch(/population|radioactive|biotech|differential equations/i);
+            });
+
+            it('returns lesson destinations', () => {
+              expect(searchLearningDestinations('eigen')[0].destination).toEqual({
+                section: 'lesson',
+                courseId: 'linear-algebra-geometry',
+                topicId: 'eigenvalues-eigenvectors',
+              });
+            });
+          });
+          EOF
+
+      - name: Build navigation shell
+        run: |
+          set -euo pipefail
+          mkdir -p components/layout
+          cat > components/Sidebar.tsx <<'EOF'
+          import React from 'react';
+          import { BookOpen, FlaskConical, Gauge, GraduationCap, Home, Library, NotebookTabs, Sigma, Sparkles, X } from 'lucide-react';
+          import { AppDestination } from '../types';
+          import { BRAND_SHORT_NAME } from '../data/branding';
+
+          interface SidebarProps {
+            destination: AppDestination;
+            onNavigate: (destination: AppDestination) => void;
+            isOpen: boolean;
+            onClose: () => void;
+          }
+
+          const primaryItems: { label: string; icon: React.ComponentType<{ size?: number }>; destination: AppDestination }[] = [
+            { label: 'Dashboard', icon: Home, destination: { section: 'dashboard' } },
+            { label: 'Math I', icon: Sigma, destination: { section: 'course', courseId: 'math-analysis' } },
+            { label: 'Math II', icon: BookOpen, destination: { section: 'course', courseId: 'linear-algebra-geometry' } },
+            { label: 'Math Lab', icon: FlaskConical, destination: { section: 'math-lab' } },
+            { label: 'Practice', icon: NotebookTabs, destination: { section: 'practice' } },
+            { label: 'Exams', icon: GraduationCap, destination: { section: 'exams' } },
+            { label: 'Progress', icon: Gauge, destination: { section: 'progress' } },
+          ];
+
+          const secondaryItems: { label: string; icon: React.ComponentType<{ size?: number }>; destination: AppDestination }[] = [
+            { label: 'Formulas', icon: Library, destination: { section: 'formulas' } },
+            { label: 'Assistant', icon: Sparkles, destination: { section: 'assistant' } },
+          ];
+
+          const matches = (current: AppDestination, target: AppDestination) =>
+            current.section === target.section && (!target.courseId || current.courseId === target.courseId);
+
+          export const Sidebar: React.FC<SidebarProps> = ({ destination, onNavigate, isOpen, onClose }) => {
+            const renderItem = (item: typeof primaryItems[number]) => {
+              const Icon = item.icon;
+              const active = matches(destination, item.destination);
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => { onNavigate(item.destination); onClose(); }}
+                  aria-current={active ? 'page' : undefined}
+                  className={`focus-ring flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition ${active ? 'bg-cyan-300/12 text-cyan-100 ring-1 ring-cyan-300/25' : 'text-slate-300 hover:bg-white/5 hover:text-white'}`}
+                >
+                  <Icon size={18} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            };
+
+            return (
+              <>
+                {isOpen && <button className="fixed inset-0 z-40 bg-black/60 md:hidden" aria-label="Close navigation overlay" onClick={onClose} />}
+                <aside className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-white/8 bg-[#091321]/95 p-4 backdrop-blur-xl transition-transform md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`} aria-label="Primary navigation">
+                  <div className="mb-7 flex items-center justify-between px-2 pt-2">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">Inmerson</p>
+                      <p className="mt-1 text-lg font-bold text-white">{BRAND_SHORT_NAME}</p>
+                    </div>
+                    <button type="button" className="focus-ring rounded-lg p-2 text-slate-300 md:hidden" onClick={onClose} aria-label="Close navigation"><X size={20} /></button>
+                  </div>
+                  <nav className="space-y-1" aria-label="Learning sections">{primaryItems.map(renderItem)}</nav>
+                  <div className="mt-auto border-t border-white/8 pt-4"><nav className="space-y-1" aria-label="Learning tools">{secondaryItems.map(renderItem)}</nav></div>
+                </aside>
+              </>
+            );
+          };
+          EOF
+
+          cat > components/layout/BottomNavigation.tsx <<'EOF'
+          import React, { useState } from 'react';
+          import { BookOpen, FlaskConical, Home, Menu, Sigma, X } from 'lucide-react';
+          import { AppDestination } from '../../types';
+
+          interface BottomNavigationProps {
+            destination: AppDestination;
+            onNavigate: (destination: AppDestination) => void;
+          }
+
+          const items = [
+            { label: 'Dashboard', icon: Home, destination: { section: 'dashboard' } as AppDestination },
+            { label: 'Math I', icon: Sigma, destination: { section: 'course', courseId: 'math-analysis' } as AppDestination },
+            { label: 'Math II', icon: BookOpen, destination: { section: 'course', courseId: 'linear-algebra-geometry' } as AppDestination },
+            { label: 'Lab', icon: FlaskConical, destination: { section: 'math-lab' } as AppDestination },
+          ];
+
+          export const BottomNavigation: React.FC<BottomNavigationProps> = ({ destination, onNavigate }) => {
+            const [moreOpen, setMoreOpen] = useState(false);
+            const active = (target: AppDestination) => destination.section === target.section && (!target.courseId || destination.courseId === target.courseId);
+            return (
+              <>
+                {moreOpen && (
+                  <div className="fixed inset-x-3 bottom-20 z-50 rounded-2xl border border-white/10 bg-[#0b1726] p-3 shadow-2xl md:hidden" role="dialog" aria-label="More navigation">
+                    <div className="mb-2 flex items-center justify-between"><span className="font-semibold text-white">More</span><button className="focus-ring rounded-lg p-2" onClick={() => setMoreOpen(false)} aria-label="Close more navigation"><X size={18} /></button></div>
+                    {[
+                      ['Practice', { section: 'practice' }], ['Exams', { section: 'exams' }], ['Progress', { section: 'progress' }], ['Formulas', { section: 'formulas' }], ['Assistant', { section: 'assistant' }],
+                    ].map(([label, next]) => <button key={label as string} className="focus-ring block w-full rounded-lg px-3 py-2 text-left text-slate-200 hover:bg-white/5" onClick={() => { onNavigate(next as AppDestination); setMoreOpen(false); }}>{label as string}</button>)}
+                  </div>
+                )}
+                <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-white/10 bg-[#07111f]/96 px-1 pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-xl md:hidden" aria-label="Mobile navigation">
+                  {items.map((item) => { const Icon = item.icon; const selected = active(item.destination); return <button key={item.label} className={`focus-ring flex min-h-14 flex-col items-center justify-center gap-1 rounded-lg text-[10px] ${selected ? 'text-cyan-200' : 'text-slate-400'}`} aria-current={selected ? 'page' : undefined} onClick={() => onNavigate(item.destination)}><Icon size={18} /><span>{item.label}</span></button>; })}
+                  <button className="focus-ring flex min-h-14 flex-col items-center justify-center gap-1 rounded-lg text-[10px] text-slate-400" onClick={() => setMoreOpen((value) => !value)} aria-expanded={moreOpen}><Menu size={18} /><span>More</span></button>
+                </nav>
+              </>
+            );
+          };
+          EOF
+
+          cat > components/Sidebar.test.tsx <<'EOF'
+          import { render, screen } from '@testing-library/react';
+          import { describe, expect, it, vi } from 'vitest';
+          import { Sidebar } from './Sidebar';
+
+          describe('Sidebar', () => {
+            it('shows the approved navigation and excludes old domains', () => {
+              render(<Sidebar destination={{ section: 'dashboard' }} onNavigate={vi.fn()} isOpen onClose={vi.fn()} />);
+              for (const label of ['Dashboard', 'Math I', 'Math II', 'Math Lab', 'Practice', 'Exams', 'Progress']) expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+              expect(screen.queryByText(/Differential Equations|Population Models|biotech/i)).not.toBeInTheDocument();
+            });
+          });
+          EOF
+
+          cat > components/layout/BottomNavigation.test.tsx <<'EOF'
+          import { render, screen } from '@testing-library/react';
+          import { describe, expect, it, vi } from 'vitest';
+          import { BottomNavigation } from './BottomNavigation';
+
+          describe('BottomNavigation', () => {
+            it('exposes compact destinations and active state', () => {
+              render(<BottomNavigation destination={{ section: 'course', courseId: 'math-analysis' }} onNavigate={vi.fn()} />);
+              for (const label of ['Dashboard', 'Math I', 'Math II', 'Lab', 'More']) expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+              expect(screen.getByRole('button', { name: 'Math I' })).toHaveAttribute('aria-current', 'page');
+            });
+          });
+          EOF
+
+      - name: Build course and lesson surfaces
+        run: |
+          set -euo pipefail
+          mkdir -p components/course
+          cat > components/course/CourseCard.tsx <<'EOF'
+          import React from 'react';
+          import { ArrowRight, CheckCircle2 } from 'lucide-react';
+          import { CourseDefinition, TopicDefinition } from '../../domain/curriculum';
+          import { AppDestination } from '../../types';
+          import { QuizResult } from '../../utils/mathCsStorage';
+
+          interface CourseCardProps {
+            course: CourseDefinition;
+            progress: number;
+            completedCount: number;
+            recommendedTopic?: TopicDefinition;
+            latestQuiz?: QuizResult;
+            onNavigate: (destination: AppDestination) => void;
+          }
+
+          export const CourseCard: React.FC<CourseCardProps> = ({ course, progress, completedCount, recommendedTopic, latestQuiz, onNavigate }) => (
+            <article data-testid="course-card" className="notebook-panel flex h-full flex-col p-5 md:p-6">
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">{course.shortTitle}</p><h2 className="mt-2 text-2xl font-bold text-white">{course.title}</h2><p className="mt-1 text-sm text-slate-400">{course.officialTitle}</p></div>
+                <span className="rounded-full border border-cyan-200/20 bg-cyan-200/8 px-3 py-1 text-sm font-semibold text-cyan-100">{progress}%</span>
+              </div>
+              <p className="text-sm leading-6 text-slate-300">{course.description}</p>
+              <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/6" aria-label={`${progress}% complete`}><div className="h-full rounded-full bg-cyan-300" style={{ width: `${progress}%` }} /></div>
+              <div className="mt-3 flex items-center gap-2 text-xs text-slate-400"><CheckCircle2 size={14} /><span>{completedCount} of {course.topics.length} topics complete</span></div>
+              <dl className="mt-5 grid gap-3 text-sm"><div><dt className="text-slate-500">Recommended next</dt><dd className="mt-1 font-medium text-slate-100">{recommendedTopic?.title ?? 'Course complete'}</dd></div><div><dt className="text-slate-500">Latest checkpoint</dt><dd className="mt-1 font-medium text-slate-100">{latestQuiz ? `${latestQuiz.percentage}%` : 'Not attempted'}</dd></div></dl>
+              <button className="focus-ring mt-6 inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-300 px-4 py-3 font-semibold text-slate-950 hover:bg-cyan-200" onClick={() => onNavigate({ section: 'course', courseId: course.id })}>Open {course.shortTitle}<ArrowRight size={17} /></button>
+            </article>
+          );
+          EOF
+
+          cat > components/course/TopicList.tsx <<'EOF'
+          import React from 'react';
+          import { Check, LockKeyhole } from 'lucide-react';
+          import { CourseDefinition, TopicDefinition, TopicId } from '../../domain/curriculum';
+
+          interface TopicListProps { course: CourseDefinition; completedTopicIds: TopicId[]; onSelect: (topic: TopicDefinition) => void; }
+
+          export const TopicList: React.FC<TopicListProps> = ({ course, completedTopicIds, onSelect }) => (
+            <ol className="space-y-3">
+              {course.topics.map((topic, index) => {
+                const complete = completedTopicIds.includes(topic.id);
+                const locked = !complete && !topic.prerequisites.every((id) => completedTopicIds.includes(id));
+                return <li key={topic.id}><button className="focus-ring notebook-panel flex w-full items-center gap-4 p-4 text-left disabled:cursor-not-allowed disabled:opacity-65" disabled={locked} onClick={() => onSelect(topic)} aria-label={`${topic.title}${locked ? ', prerequisites incomplete' : ''}`}><span className={`flex size-9 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${complete ? 'border-emerald-300/40 bg-emerald-300/10 text-emerald-200' : locked ? 'border-slate-600 text-slate-500' : 'border-cyan-300/40 text-cyan-200'}`}>{complete ? <Check size={17} /> : locked ? <LockKeyhole size={15} /> : index + 1}</span><span className="min-w-0 flex-1"><span className="block font-semibold text-white">{topic.title}</span><span className="mt-1 block text-sm text-slate-400">{topic.description}</span></span><span className="text-xs text-slate-500">{topic.estimatedStudyMinutes} min</span></button></li>;
+              })}
+            </ol>
+          );
+          EOF
+
+          cat > components/course/LearningFlow.tsx <<'EOF'
+          import React from 'react';
+          import { BrainCircuit, Code2, Eye, ListChecks, Trophy } from 'lucide-react';
+          import { TopicDefinition } from '../../domain/curriculum';
+          import { MathRenderer } from '../MathRenderer';
+
+          interface LearningFlowProps { topic: TopicDefinition; onOpenLab: () => void; }
+          const stages = ['Learn', 'Visualize', 'Practice', 'CS Connection', 'Quiz'] as const;
+
+          export const LearningFlow: React.FC<LearningFlowProps> = ({ topic, onOpenLab }) => (
+            <div className="space-y-5" data-testid="learning-flow">
+              <section className="notebook-panel p-5" aria-labelledby="stage-learn"><h2 id="stage-learn" className="stage-title"><BrainCircuit />{stages[0]}</h2>{topic.sections.map((section) => <div key={section.id} className="mt-4"><h3 className="font-semibold text-white">{section.title}</h3><p className="mt-2 leading-7 text-slate-300">{section.markdown}</p></div>)}{topic.formulas.map((formula) => <div key={formula.id} className="formula-panel mt-4"><p className="text-sm font-semibold text-cyan-100">{formula.label}</p><MathRenderer expression={formula.latex} /><p className="text-sm text-slate-400">{formula.explanation}</p></div>)}</section>
+              <section className="notebook-panel p-5" aria-labelledby="stage-visualize"><h2 id="stage-visualize" className="stage-title"><Eye />{stages[1]}</h2><p className="mt-3 text-slate-300">Use the approved {topic.visualization.kind.replaceAll('-', ' ')} preset to observe this idea.</p><button className="focus-ring mt-4 rounded-lg border border-cyan-300/30 px-4 py-2 text-sm font-semibold text-cyan-100" onClick={onOpenLab}>Open visualization</button></section>
+              <section className="notebook-panel p-5" aria-labelledby="stage-practice"><h2 id="stage-practice" className="stage-title"><ListChecks />{stages[2]}</h2><ol className="mt-4 space-y-3">{topic.workedExamples[0].steps.map((step, index) => <li key={step} className="flex gap-3 text-slate-300"><span className="font-mono text-cyan-300">{String(index + 1).padStart(2, '0')}</span><span>{step}</span></li>)}</ol><p className="mt-4 text-sm text-slate-400">{topic.practiceQuestions.length} guided questions are available for this topic.</p></section>
+              <section className="code-panel p-5" aria-labelledby="stage-cs"><h2 id="stage-cs" className="stage-title"><Code2 />{stages[3]}</h2>{topic.csConnections.map((connection) => <div key={connection.title} className="mt-3"><h3 className="font-semibold text-amber-100">{connection.title}</h3><p className="mt-2 leading-7 text-slate-300">{connection.explanation}</p></div>)}</section>
+              <section className="notebook-panel p-5" aria-labelledby="stage-quiz"><h2 id="stage-quiz" className="stage-title"><Trophy />{stages[4]}</h2><p className="mt-3 font-medium text-white">{topic.quiz.title}</p><p className="mt-1 text-sm text-slate-400">{topic.quiz.questions.length} questions. Quiz runner activates in the assessment stage.</p><button className="mt-4 cursor-not-allowed rounded-lg border border-white/10 px-4 py-2 text-sm text-slate-500" disabled>Start checkpoint</button></section>
+            </div>
+          );
+          EOF
+
+          cat > views/CourseHubView.tsx <<'EOF'
+          import React from 'react';
+          import { ArrowLeft } from 'lucide-react';
+          import { CourseId } from '../domain/curriculum';
+          import { AppDestination } from '../types';
+          import { getCourse } from '../data/courseCatalog';
+          import { MathCsState } from '../utils/mathCsStorage';
+          import { getCourseProgress, getRecommendedTopic } from '../utils/progress';
+          import { TopicList } from '../components/course/TopicList';
+
+          interface CourseHubViewProps { courseId: CourseId; state: MathCsState; onNavigate: (destination: AppDestination) => void; }
+          export const CourseHubView: React.FC<CourseHubViewProps> = ({ courseId, state, onNavigate }) => {
+            const course = getCourse(courseId);
+            if (!course) return null;
+            const recommended = getRecommendedTopic(state, course);
+            return <div className="mx-auto max-w-5xl"><button className="focus-ring mb-5 inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white" onClick={() => onNavigate({ section: 'dashboard' })}><ArrowLeft size={16} />Dashboard</button><header className="notebook-panel mb-6 p-6 md:p-8"><p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">{course.shortTitle}</p><h1 className="mt-2 text-3xl font-bold text-white md:text-4xl">{course.title}</h1><p className="mt-2 text-slate-400">{course.officialTitle}</p><p className="mt-5 max-w-3xl leading-7 text-slate-300">{course.description}</p><div className="mt-5 flex flex-wrap gap-3 text-sm"><span className="rounded-full bg-white/5 px-3 py-1.5 text-slate-200">{getCourseProgress(state, course)}% complete</span><span className="rounded-full bg-cyan-300/8 px-3 py-1.5 text-cyan-100">Next: {recommended?.title ?? 'Review'}</span></div></header><TopicList course={course} completedTopicIds={state.completedTopicIds} onSelect={(topic) => onNavigate({ section: 'lesson', courseId, topicId: topic.id })} /></div>;
+          };
+          EOF
+
+          cat > views/LessonWorkspaceView.tsx <<'EOF'
+          import React from 'react';
+          import { ArrowLeft, Bookmark, CheckCircle2 } from 'lucide-react';
+          import { CourseId, TopicId } from '../domain/curriculum';
+          import { AppDestination } from '../types';
+          import { getCourse, getTopic } from '../data/courseCatalog';
+          import { MathCsState } from '../utils/mathCsStorage';
+          import { LearningFlow } from '../components/course/LearningFlow';
+
+          interface LessonWorkspaceViewProps { courseId: CourseId; topicId: TopicId; state: MathCsState; onNavigate: (destination: AppDestination) => void; onComplete: (topicId: TopicId) => void; }
+          export const LessonWorkspaceView: React.FC<LessonWorkspaceViewProps> = ({ courseId, topicId, state, onNavigate, onComplete }) => {
+            const course = getCourse(courseId); const topic = getTopic(courseId, topicId); if (!course || !topic) return null;
+            const complete = state.completedTopicIds.includes(topic.id);
+            const labId = topic.visualization.kind === 'matrix-lab' ? 'matrix' : topic.visualization.kind === 'vector-geometry-lab' ? 'vector-geometry' : 'function';
+            return <div className="mx-auto max-w-[1320px]"><div className="mb-5 flex items-center justify-between gap-4"><button className="focus-ring inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white" onClick={() => onNavigate({ section: 'course', courseId })}><ArrowLeft size={16} />{course.shortTitle}</button><button className="focus-ring inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-200" onClick={() => onComplete(topic.id)}>{complete ? <CheckCircle2 size={16} /> : <Bookmark size={16} />}{complete ? 'Completed' : 'Mark complete'}</button></div><header className="mb-6"><p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">{course.shortTitle} · {topic.estimatedStudyMinutes} min</p><h1 className="mt-2 text-3xl font-bold text-white md:text-4xl">{topic.title}</h1><p className="mt-3 max-w-3xl leading-7 text-slate-300">{topic.description}</p></header><div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px]"><LearningFlow topic={topic} onOpenLab={() => onNavigate({ section: 'math-lab', courseId, topicId, labId })} /><aside className="space-y-4 xl:sticky xl:top-6 xl:self-start" aria-label="Lesson context"><div className="notebook-panel p-4"><h2 className="font-semibold text-white">Learning goals</h2><ul className="mt-3 space-y-2 text-sm text-slate-300">{topic.learningObjectives.map((goal) => <li key={goal}>• {goal}</li>)}</ul></div><div className="notebook-panel p-4"><h2 className="font-semibold text-white">Prerequisites</h2><p className="mt-2 text-sm text-slate-400">{topic.prerequisites.length ? topic.prerequisites.join(', ') : 'No prerequisites'}</p></div></aside></div></div>;
+          };
+          EOF
+
+          cat > views/DashboardView.tsx <<'EOF'
+          import React from 'react';
+          import { motion, useReducedMotion } from 'framer-motion';
+          import { ArrowRight, FlaskConical, Library, Search } from 'lucide-react';
+          import { BRAND_DESCRIPTION, BRAND_NAME, BRAND_TAGLINE } from '../data/branding';
+          import { COURSES } from '../data/courseCatalog';
+          import { searchLearningDestinations } from '../data/learningCatalog';
+          import { AppDestination } from '../types';
+          import { MathCsState } from '../utils/mathCsStorage';
+          import { getCourseProgress, getRecommendedTopic } from '../utils/progress';
+          import { CourseCard } from '../components/course/CourseCard';
+
+          interface DashboardProps { state: MathCsState; onNavigate: (destination: AppDestination) => void; }
+          export const DashboardView: React.FC<DashboardProps> = ({ state, onNavigate }) => {
+            const reduce = useReducedMotion(); const [query, setQuery] = React.useState(''); const results = searchLearningDestinations(query);
+            return <motion.div initial={{ opacity: 0, y: reduce ? 0 : 10 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-6xl"><header className="mb-8"><p className="text-xs font-bold uppercase tracking-[0.22em] text-cyan-300">{BRAND_TAGLINE}</p><h1 className="mt-3 text-4xl font-bold tracking-tight text-white md:text-6xl">{BRAND_NAME}</h1><p className="mt-4 max-w-3xl text-lg leading-8 text-slate-300">{BRAND_DESCRIPTION}</p></header><div className="relative mb-8"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} /><label className="sr-only" htmlFor="course-search">Search course topics</label><input id="course-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search limits, matrices, eigenvalues…" className="focus-ring h-13 w-full rounded-xl border border-white/10 bg-[#0b1726]/90 pl-11 pr-4 text-white placeholder:text-slate-500" />{query && <div className="absolute z-20 mt-2 w-full rounded-xl border border-white/10 bg-[#0b1726] p-2 shadow-2xl">{results.length ? results.map((result) => <button key={result.topic.id} className="focus-ring flex w-full items-center justify-between rounded-lg p-3 text-left hover:bg-white/5" onClick={() => onNavigate(result.destination)}><span><span className="block font-semibold text-white">{result.topic.title}</span><span className="text-xs text-slate-500">{result.course.shortTitle}</span></span><ArrowRight size={16} /></button>) : <p className="p-3 text-sm text-slate-400">No matching topic</p>}</div>}</div><section className="grid gap-5 md:grid-cols-2" aria-label="Courses">{COURSES.map((course) => { const quizzes = state.quizResults.filter((result) => result.courseId === course.id); return <CourseCard key={course.id} course={course} progress={getCourseProgress(state, course)} completedCount={course.topics.filter((topic) => state.completedTopicIds.includes(topic.id)).length} recommendedTopic={getRecommendedTopic(state, course)} latestQuiz={quizzes.at(-1)} onNavigate={onNavigate} />; })}</section><section className="mt-7 grid gap-4 sm:grid-cols-2"><button className="focus-ring notebook-panel flex items-center gap-4 p-5 text-left" onClick={() => onNavigate({ section: 'math-lab' })}><span className="rounded-xl bg-cyan-300/10 p-3 text-cyan-200"><FlaskConical /></span><span><span className="block font-semibold text-white">Math Lab</span><span className="mt-1 block text-sm text-slate-400">Explore approved function, matrix, and vector presets.</span></span></button><button className="focus-ring notebook-panel flex items-center gap-4 p-5 text-left" onClick={() => onNavigate({ section: 'formulas' })}><span className="rounded-xl bg-amber-300/10 p-3 text-amber-200"><Library /></span><span><span className="block font-semibold text-white">Formula Workspace</span><span className="mt-1 block text-sm text-slate-400">Keep formulas and your local notes together.</span></span></button></section></motion.div>;
+          };
+          EOF
+
+      - name: Replace app shell and design system
+        run: |
+          set -euo pipefail
+          cat > components/AnimatedBackground.tsx <<'EOF'
+          import React from 'react';
+          export const AnimatedBackground: React.FC = () => <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-[#07111f]"><div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_10%,rgba(34,211,238,0.08),transparent_34%),linear-gradient(180deg,#07111f_0%,#091522_55%,#06101b_100%)]" /><div className="coordinate-grid absolute inset-0 opacity-40" /><div className="ambient-light absolute -right-32 top-1/3 size-[32rem] rounded-full bg-cyan-400/5 blur-[110px]" /></div>;
+          EOF
+
+          cat > App.tsx <<'EOF'
+          import React, { useState } from 'react';
+          import { Menu } from 'lucide-react';
+          import { AnimatedBackground } from './components/AnimatedBackground';
+          import { Sidebar } from './components/Sidebar';
+          import { BottomNavigation } from './components/layout/BottomNavigation';
+          import { DashboardView } from './views/DashboardView';
+          import { CourseHubView } from './views/CourseHubView';
+          import { LessonWorkspaceView } from './views/LessonWorkspaceView';
+          import { AppDestination } from './types';
+          import { getCourse, getTopic } from './data/courseCatalog';
+          import { createDefaultMathCsState, loadMathCsState, MathCsState, saveMathCsState } from './utils/mathCsStorage';
+          import { markTopicComplete } from './utils/progress';
+
+          const isValidDestination = (destination: AppDestination): boolean => {
+            if (destination.section === 'course') return Boolean(destination.courseId && getCourse(destination.courseId));
+            if (destination.section === 'lesson') return Boolean(destination.courseId && destination.topicId && getTopic(destination.courseId, destination.topicId));
+            return true;
+          };
+
+          const Placeholder: React.FC<{ title: string; description: string }> = ({ title, description }) => <div className="mx-auto max-w-4xl"><h1 className="text-3xl font-bold text-white">{title}</h1><div className="notebook-panel mt-5 p-6"><p className="leading-7 text-slate-300">{description}</p></div></div>;
+
+          const App: React.FC = () => {
+            const initial = typeof window === 'undefined' ? createDefaultMathCsState() : loadMathCsState();
+            const [state, setState] = useState<MathCsState>(initial);
+            const stored = initial.lastDestination as AppDestination | null;
+            const [destination, setDestination] = useState<AppDestination>(stored && isValidDestination(stored) ? stored : { section: 'dashboard' });
+            const [menuOpen, setMenuOpen] = useState(false);
+
+            const updateState = (next: MathCsState) => { setState(next); saveMathCsState(next); };
+            const navigate = (next: AppDestination) => {
+              const safe = isValidDestination(next) ? next : { section: 'dashboard' } as AppDestination;
+              setDestination(safe);
+              updateState({ ...state, lastDestination: safe });
+              setMenuOpen(false);
+            };
+
+            const renderContent = () => {
+              if (!isValidDestination(destination)) return <div className="mx-auto max-w-xl text-center"><h1 className="text-3xl font-bold text-white">Learning path not found</h1><p className="mt-3 text-slate-400">Choose a safe destination to continue.</p><div className="mt-5 flex justify-center gap-3"><button className="focus-ring rounded-lg bg-cyan-300 px-4 py-2 text-slate-950" onClick={() => navigate({ section: 'dashboard' })}>Dashboard</button><button className="focus-ring rounded-lg border border-white/10 px-4 py-2" onClick={() => navigate({ section: 'course', courseId: 'math-analysis' })}>Math I</button><button className="focus-ring rounded-lg border border-white/10 px-4 py-2" onClick={() => navigate({ section: 'course', courseId: 'linear-algebra-geometry' })}>Math II</button></div></div>;
+              switch (destination.section) {
+                case 'dashboard': return <DashboardView state={state} onNavigate={navigate} />;
+                case 'course': return <CourseHubView courseId={destination.courseId!} state={state} onNavigate={navigate} />;
+                case 'lesson': return <LessonWorkspaceView courseId={destination.courseId!} topicId={destination.topicId!} state={state} onNavigate={navigate} onComplete={(topicId) => updateState(markTopicComplete(state, topicId))} />;
+                case 'math-lab': return <Placeholder title="Math Lab" description="Function Explorer, Matrix Lab, and Vector & Geometry Lab are being consolidated into this controlled workspace." />;
+                case 'practice': return <Placeholder title="Practice" description="Topic-filtered guided practice will use the same deterministic curriculum question bank." />;
+                case 'exams': return <Placeholder title="Exams" description="Course checkpoints and mock examinations will report results by topic." />;
+                case 'progress': return <Placeholder title="Progress" description="Completion, mastery, and review recommendations remain local to this device." />;
+                case 'formulas': return <Placeholder title="Formula Workspace" description="Saved formulas and personal notes will appear here." />;
+                case 'assistant': return <Placeholder title="Math Assistant" description="The contextual assistant will provide bounded, stepwise hints for the active topic." />;
+              }
+            };
+
+            return <div className="min-h-screen bg-[#07111f] text-[#f4f1e8]"><AnimatedBackground /><Sidebar destination={destination} onNavigate={navigate} isOpen={menuOpen} onClose={() => setMenuOpen(false)} /><header className="sticky top-0 z-30 flex h-14 items-center border-b border-white/8 bg-[#07111f]/90 px-4 backdrop-blur md:hidden"><button className="focus-ring rounded-lg p-2" onClick={() => setMenuOpen(true)} aria-label="Open navigation"><Menu /></button><span className="ml-3 font-semibold text-white">Math-CS</span></header><main className="min-h-screen px-4 py-6 pb-24 md:ml-72 md:px-8 md:py-8 md:pb-10">{renderContent()}</main><BottomNavigation destination={destination} onNavigate={navigate} /></div>;
+          };
+          export default App;
+          EOF
+
+          cat > index.css <<'EOF'
+          @tailwind base;
+          @tailwind components;
+          @tailwind utilities;
+
+          :root {
+            color-scheme: dark;
+            --surface: #0b1726;
+            --surface-raised: #0e1c2d;
+            --text: #f4f1e8;
+            --muted: #9aa9ba;
+            --accent: #67e8f9;
+            --accent-warm: #fcd34d;
+            --border: rgba(226, 232, 240, 0.11);
+            --focus: #a5f3fc;
+          }
+
+          html { background: #07111f; }
+          body { margin: 0; min-width: 320px; overflow-x: hidden; background: #07111f; color: var(--text); font-family: Inter, ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+          button, input, textarea, select { font: inherit; }
+          button { color: inherit; }
+          .notebook-panel { border: 1px solid var(--border); border-radius: 1rem; background: linear-gradient(145deg, rgba(14, 28, 45, 0.94), rgba(9, 20, 34, 0.94)); box-shadow: 0 16px 44px rgba(0, 0, 0, 0.16); }
+          .formula-panel { overflow-x: auto; border: 1px solid rgba(103, 232, 249, 0.16); border-radius: 0.85rem; background: rgba(5, 15, 27, 0.75); padding: 1rem; }
+          .code-panel { border: 1px solid rgba(252, 211, 77, 0.15); border-radius: 1rem; background: linear-gradient(145deg, rgba(24, 25, 28, 0.94), rgba(10, 19, 29, 0.96)); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+          .focus-ring:focus-visible, a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+          .coordinate-grid { background-image: linear-gradient(rgba(148, 163, 184, 0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, 0.045) 1px, transparent 1px); background-size: 32px 32px; mask-image: linear-gradient(to bottom, black, transparent 92%); }
+          .stage-title { display: flex; align-items: center; gap: 0.6rem; font-size: 1.05rem; font-weight: 700; color: white; }
+          .stage-title svg { width: 1.15rem; color: var(--accent); }
+          .katex-display { margin: 0.75rem 0; overflow-x: auto; overflow-y: hidden; }
+          ::selection { background: rgba(103, 232, 249, 0.22); color: white; }
+          @keyframes ambient-drift { 0%,100% { transform: translate3d(0,0,0); } 50% { transform: translate3d(-2rem,1rem,0); } }
+          .ambient-light { animation: ambient-drift 18s ease-in-out infinite; }
+          @media (prefers-reduced-motion: reduce) { *,*::before,*::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }
+          EOF
+
+          cat > tailwind.config.js <<'EOF'
+          /** @type {import('tailwindcss').Config} */
+          export default {
+            content: ['./index.html', './components/**/*.{js,ts,jsx,tsx}', './data/**/*.{js,ts,jsx,tsx}', './domain/**/*.{js,ts,jsx,tsx}', './utils/**/*.{js,ts,jsx,tsx}', './views/**/*.{js,ts,jsx,tsx}', './*.{js,ts,jsx,tsx}'],
+            theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] }, colors: { notebook: { 950: '#07111f', 900: '#0b1726', 800: '#0e1c2d' } } } },
+            plugins: [],
+          };
+          EOF
+
+          git rm -f components/DNAStrand.tsx
+
+      - name: Add shell and course tests
+        run: |
+          set -euo pipefail
+          cat > views/DashboardView.test.tsx <<'EOF'
+          import { render, screen } from '@testing-library/react';
+          import { describe, expect, it, vi } from 'vitest';
+          import { createDefaultMathCsState } from '../utils/mathCsStorage';
+          import { DashboardView } from './DashboardView';
+          describe('DashboardView', () => { it('shows exactly two approved courses and official titles', () => { render(<DashboardView state={createDefaultMathCsState()} onNavigate={vi.fn()} />); expect(screen.getAllByTestId('course-card')).toHaveLength(2); expect(screen.getByText('Analiza matematyczna')).toBeInTheDocument(); expect(screen.getByText('Algebra liniowa i geometria')).toBeInTheDocument(); expect(screen.getAllByText('0%').length).toBeGreaterThanOrEqual(2); }); });
+          EOF
+
+          cat > views/CourseHubView.test.tsx <<'EOF'
+          import { render, screen } from '@testing-library/react';
+          import { describe, expect, it, vi } from 'vitest';
+          import { markTopicComplete } from '../utils/progress';
+          import { createDefaultMathCsState } from '../utils/mathCsStorage';
+          import { CourseHubView } from './CourseHubView';
+          describe('CourseHubView', () => { it('derives progress and recommendation from state', () => { const state = markTopicComplete(createDefaultMathCsState(), 'functions-graphs'); render(<CourseHubView courseId="math-analysis" state={state} onNavigate={vi.fn()} />); expect(screen.getByRole('heading', { level: 1, name: 'Mathematical Analysis' })).toBeInTheDocument(); expect(screen.getByText('13% complete')).toBeInTheDocument(); expect(screen.getByText('Next: Sequences')).toBeInTheDocument(); }); });
+          EOF
+
+          cat > views/LessonWorkspaceView.test.tsx <<'EOF'
+          import { render, screen } from '@testing-library/react';
+          import { describe, expect, it, vi } from 'vitest';
+          import { createDefaultMathCsState } from '../utils/mathCsStorage';
+          import { LessonWorkspaceView } from './LessonWorkspaceView';
+          describe('LessonWorkspaceView', () => { it('renders the standard flow in order from topic data', () => { render(<LessonWorkspaceView courseId="math-analysis" topicId="limits" state={createDefaultMathCsState()} onNavigate={vi.fn()} onComplete={vi.fn()} />); const flow = screen.getByTestId('learning-flow'); const text = flow.textContent ?? ''; const labels = ['Learn', 'Visualize', 'Practice', 'CS Connection', 'Quiz']; labels.reduce((previous, label) => { const position = text.indexOf(label); expect(position).toBeGreaterThan(previous); return position; }, -1); expect(screen.getByText('Function limit')).toBeInTheDocument(); expect(screen.getByText('Numerical stability')).toBeInTheDocument(); expect(screen.getByText('Factor (x^2-1)/(x-1).')).toBeInTheDocument(); }); });
+          EOF
+
+          cat > App.test.tsx <<'EOF'
+          import { render, screen } from '@testing-library/react';
+          import { beforeEach, describe, expect, it } from 'vitest';
+          import App from './App';
+          describe('Math-CS app shell', () => { beforeEach(() => localStorage.clear()); it('provides an accessible notebook shell', () => { render(<App />); expect(screen.getAllByRole('main')).toHaveLength(1); expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1); expect(screen.getByLabelText('Primary navigation')).toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Open Math I' })).toBeVisible(); expect(document.querySelector('[aria-hidden="true"]')).not.toBeNull(); }); });
+          EOF
+
+      - name: Verify and commit batch
+        run: |
+          set -euo pipefail
+          npm test -- components/Sidebar.test.tsx components/layout/BottomNavigation.test.tsx data/learningCatalog.test.ts views/DashboardView.test.tsx views/CourseHubView.test.tsx views/LessonWorkspaceView.test.tsx App.test.tsx
+          npm run verify
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: add Math-CS navigation and course experience"
+          git push origin feat/math-cs-conversion
