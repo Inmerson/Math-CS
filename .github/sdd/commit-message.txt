@@ -1,1 +1,0 @@
-feat: apply restrained cosmic styling to learning views

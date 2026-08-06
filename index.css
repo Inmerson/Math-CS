@@ -305,3 +305,59 @@ select:focus-visible {
   padding: clamp(2rem, 5vw, 4.5rem);
   padding-top: clamp(3.25rem, 8vw, 6.25rem);
 }
+
+.cosmic-reading-shell {
+  position: relative;
+}
+
+.cosmic-reading-shell::before {
+  content: "";
+  pointer-events: none;
+  position: fixed;
+  inset: 4rem 2rem 2rem calc(18rem + 2rem);
+  z-index: -1;
+  background: radial-gradient(circle at 76% 16%, rgba(98, 168, 255, 0.045), transparent 30%);
+}
+
+.cosmic-instrument-shell .notebook-panel,
+.cosmic-instrument-shell .cosmic-glass {
+  border-color: rgba(98, 168, 255, 0.16);
+}
+
+.cosmic-assessment-shell {
+  --assessment-surface: rgba(7, 17, 31, 0.86);
+}
+
+.cosmic-assessment-shell .cosmic-glass {
+  background: linear-gradient(145deg, var(--assessment-surface), rgba(3, 7, 17, 0.84));
+}
+
+.cosmic-notation-shell {
+  position: relative;
+}
+
+.cosmic-notation-shell::before {
+  content: "∫   Σ   Aλ = λv   det(A)";
+  pointer-events: none;
+  position: fixed;
+  right: 3vw;
+  top: 7rem;
+  z-index: -1;
+  color: rgba(167, 139, 250, 0.035);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: clamp(2rem, 5vw, 5rem);
+  letter-spacing: .2em;
+  transform: rotate(-5deg);
+}
+
+.cosmic-console-shell .cosmic-glass {
+  border-color: rgba(98, 168, 255, 0.14);
+  background: linear-gradient(145deg, rgba(6, 18, 33, 0.92), rgba(3, 8, 17, 0.9));
+}
+
+@media (max-width: 767px) {
+  .cosmic-reading-shell::before,
+  .cosmic-notation-shell::before {
+    display: none;
+  }
+}
