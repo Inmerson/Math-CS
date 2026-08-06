@@ -38,6 +38,7 @@ jobs:
           cp .github/workflows/bootstrap-source.yml /tmp/bootstrap-source.yml
           find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
           cp -a "$SOURCE_DIR"/. .
+          rm -f .github/workflows/ci.yml .github/workflows/deploy.yml
           mkdir -p .github/workflows
           cp /tmp/bootstrap-source.yml .github/workflows/bootstrap-source.yml
           cat > MIGRATION_SOURCE.md <<'EOF'
