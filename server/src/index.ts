@@ -20,7 +20,7 @@ app.use(express.urlencoded({ extended: true }));
 app.get('/health', (req: Request, res: Response) => {
   res.json({ 
     status: 'OK', 
-    message: 'Inmerson Lab API is running',
+    message: 'Inmerson Math-CS API is running',
     timestamp: new Date().toISOString()
   });
 });
@@ -32,9 +32,9 @@ app.use('/api/exam', examRoutes);
 // Root endpoint
 app.get('/', (req: Request, res: Response) => {
   res.json({
-    name: 'Inmerson Lab API',
+    name: 'Inmerson Math-CS API',
     version: '1.0.0',
-    description: 'Backend API for Inmerson Personal Math & Biotech Lab',
+    description: 'Optional API for deterministic Inmerson Math-CS services',
     endpoints: {
       health: '/health',
       matrix: {
@@ -71,7 +71,7 @@ app.use((err: Error, req: Request, res: Response, next: express.NextFunction) =>
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`✅ Inmerson Lab API server running on port ${PORT}`);
+  console.log(`✅ Inmerson Math-CS API server running on port ${PORT}`);
   console.log(`📊 Health check available at http://localhost:${PORT}/health`);
   console.log(`📚 API documentation at http://localhost:${PORT}/`);
 });

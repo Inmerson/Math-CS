@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Simple test script for Math Biotech API
+ * Simple test script for Math-CS API
  * Run with: node test-api.js
  */
 
@@ -38,7 +38,7 @@ async function testEndpoint(name, method, path, body = null) {
 }
 
 async function runTests() {
-  console.log('🚀 Math Biotech API Test Suite');
+  console.log('🚀 Math-CS API Test Suite');
   console.log(`📍 Testing against: ${API_BASE_URL}`);
   
   // Health check

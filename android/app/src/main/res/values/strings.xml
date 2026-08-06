@@ -1,7 +1,7 @@
-<?xml version='1.0' encoding='utf-8'?>
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Inmerson Lab</string>
-    <string name="title_activity_main">Inmerson Lab</string>
-    <string name="package_name">com.inmersion.mathbiotech</string>
-    <string name="custom_url_scheme">com.inmersion.mathbiotech</string>
+    <string name="app_name">Math-CS</string>
+    <string name="title_activity_main">Inmerson Math-CS</string>
+    <string name="package_name">com.inmersion.mathcs</string>
+    <string name="custom_url_scheme">com.inmersion.mathcs</string>
 </resources>

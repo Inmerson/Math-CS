@@ -1,4 +1,4 @@
-package com.inmersion.mathbiotech;
+package com.inmersion.mathcs;
 
 import com.getcapacitor.BridgeActivity;
 

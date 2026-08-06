@@ -1,7 +1,7 @@
 services:
   - type: web
-    name: math-biotech-app
-    env: static
-    buildCommand: npm install && npm run build
-    staticPublishPath: ./dist
-    branch: main
+    name: inmerson-math-cs-api
+    env: node
+    rootDir: server
+    buildCommand: npm ci && npm run build
+    startCommand: npm start

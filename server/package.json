@@ -1,7 +1,7 @@
 {
-  "name": "math-biotech-api",
+  "name": "inmerson-math-cs-api",
   "version": "1.0.0",
-  "description": "Backend API for Math Biotech Project",
+  "description": "Optional API for deterministic Math-CS matrix and assessment services",
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
