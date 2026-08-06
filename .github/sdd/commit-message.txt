@@ -1,0 +1,1 @@
+feat: give courses distinct cosmic identities
