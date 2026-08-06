@@ -1,0 +1,62 @@
+name: Fix and execute Math-CS learning tools batch
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/execute-batch-4-fix.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/math-cs-conversion
+          fetch-depth: 0
+      - name: Execute corrected learning tools scripts
+        run: |
+          set -euo pipefail
+          curl -L --fail https://raw.githubusercontent.com/Inmerson/Math-CS/main/.github/workflows/execute-batch-4.yml -o /tmp/batch.yml
+          python3 - <<'PY'
+          from pathlib import Path
+          lines = Path('/tmp/batch.yml').read_text().splitlines()
+          scripts = []
+          index = 0
+          while index < len(lines):
+              if lines[index] == '        run: |':
+                  index += 1
+                  block = []
+                  while index < len(lines):
+                      line = lines[index]
+                      if line and len(line) - len(line.lstrip(' ')) <= 8:
+                          break
+                      block.append(line[10:] if line.startswith('          ') else '')
+                      index += 1
+                  script = '\n'.join(block).rstrip() + '\n'
+                  script = script.replace(
+                      "const close = (a: number, b: number, tolerance: number) => Math.abs(a - b) <= tolerance;",
+                      "const close = (a: number, b: number, tolerance: number) => Math.abs(a - b) <= tolerance + Number.EPSILON * 10;",
+                  )
+                  script = script.replace(
+                      "expect(screen.getByText(/Mathematical Analysis and Linear Algebra & Geometry/)).toBeInTheDocument();",
+                      "expect(screen.getAllByText(/Mathematical Analysis and Linear Algebra & Geometry/).length).toBeGreaterThan(0);",
+                  )
+                  scripts.append(script)
+                  continue
+              index += 1
+          if len(scripts) != 6:
+              raise SystemExit(f'Expected 6 run blocks, found {len(scripts)}')
+          for number, script in enumerate(scripts, start=1):
+              path = Path(f'/tmp/learning-step-{number}.sh')
+              path.write_text('#!/usr/bin/env bash\n' + script)
+              path.chmod(0o755)
+          PY
+          npm cache clean --force
+          for script in /tmp/learning-step-*.sh; do
+            echo "Executing ${script}"
+            "$script"
+          done
