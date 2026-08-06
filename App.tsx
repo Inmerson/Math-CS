@@ -14,9 +14,9 @@ import { FormulaWorkspaceView } from './views/FormulaWorkspaceView';
 import { AIChatView } from './views/AIChatView';
 import { QuizSubmission } from './components/quiz/QuizRunner';
 import { AppDestination } from './types';
-import { getCourse, getTopic } from './data/courseCatalog';
+import { COURSES, getCourse, getTopic } from './data/courseCatalog';
 import { createDefaultMathCsState, loadMathCsState, MathCsState, saveMathCsState } from './utils/mathCsStorage';
-import { markTopicComplete, recordQuizResult, removeFormula, saveFormula, saveFormulaNote } from './utils/progress';
+import { getOverallProgress, markTopicComplete, recordQuizResult, removeFormula, saveFormula, saveFormulaNote } from './utils/progress';
 
 const isValidDestination = (destination: AppDestination): boolean => {
   if (destination.section === 'course') return Boolean(destination.courseId && getCourse(destination.courseId));
@@ -31,6 +31,7 @@ const App: React.FC = () => {
   const stored = initial.lastDestination as AppDestination | null;
   const [destination, setDestination] = useState<AppDestination>(stored && isValidDestination(stored) ? stored : { section: 'dashboard' });
   const [menuOpen, setMenuOpen] = useState(false);
+  const overallProgress = getOverallProgress(state, COURSES);
 
   const updateState = (next: MathCsState) => { setState(next); saveMathCsState(next); };
   const navigate = (next: AppDestination) => {
@@ -60,6 +61,6 @@ const App: React.FC = () => {
     }
   };
 
-  return <div className="min-h-screen bg-[#07111f] text-[#f4f1e8]"><AnimatedBackground /><Sidebar destination={destination} onNavigate={navigate} isOpen={menuOpen} onClose={() => setMenuOpen(false)} /><header className="sticky top-0 z-30 flex h-14 items-center border-b border-white/8 bg-[#07111f]/90 px-4 backdrop-blur md:hidden"><button className="focus-ring rounded-lg p-2" onClick={() => setMenuOpen(true)} aria-label="Open navigation"><Menu /></button><span className="ml-3 font-semibold text-white">Math-CS</span></header><main className="min-h-screen px-4 py-6 pb-24 md:ml-72 md:px-8 md:py-8 md:pb-10">{renderContent()}</main><BottomNavigation destination={destination} onNavigate={navigate} /></div>;
+  return <div className="cosmic-shell min-h-screen text-[#f5f7fb]"><AnimatedBackground /><Sidebar destination={destination} onNavigate={navigate} isOpen={menuOpen} onClose={() => setMenuOpen(false)} overallProgress={overallProgress} /><header className="cosmic-glass sticky top-0 z-30 flex h-14 items-center border-x-0 border-t-0 px-4 md:hidden"><button className="focus-ring rounded-lg p-2" onClick={() => setMenuOpen(true)} aria-label="Open navigation"><Menu /></button><span className="ml-3 font-semibold text-white">Math-CS</span></header><main className="min-h-screen px-4 py-6 pb-24 md:ml-72 md:px-8 md:py-8 md:pb-10">{renderContent()}</main><BottomNavigation destination={destination} onNavigate={navigate} /></div>;
 };
 export default App;
