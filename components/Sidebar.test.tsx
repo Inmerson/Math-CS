@@ -1,22 +1,11 @@
-import React from 'react';
-import { render } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import { Sidebar } from './Sidebar';
-import { ModuleType, ViewMode } from '../types';
 
-describe('Sidebar desktop visibility', () => {
-  it('applies the desktop visibility override to the animated sidebar', () => {
-    const { container } = render(
-      <Sidebar
-        currentView={ViewMode.BASICS}
-        currentModule={ModuleType.MATRIX}
-        setView={() => undefined}
-        goHome={() => undefined}
-        isOpen={false}
-        toggleSidebar={() => undefined}
-      />,
-    );
-
-    expect(container.querySelector('.framer-motion-sidebar')).toBeInTheDocument();
+describe('Sidebar', () => {
+  it('shows the approved navigation and excludes old domains', () => {
+    render(<Sidebar destination={{ section: 'dashboard' }} onNavigate={vi.fn()} isOpen onClose={vi.fn()} />);
+    for (const label of ['Dashboard', 'Math I', 'Math II', 'Math Lab', 'Practice', 'Exams', 'Progress']) expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+    expect(screen.queryByText(/Differential Equations|Population Models|biotech/i)).not.toBeInTheDocument();
   });
 });

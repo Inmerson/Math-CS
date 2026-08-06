@@ -127,3 +127,23 @@ declare global {
     interface IntrinsicElements extends ThreeElements {}
   }
 }
+
+export type AppSection =
+  | 'dashboard'
+  | 'course'
+  | 'lesson'
+  | 'math-lab'
+  | 'practice'
+  | 'exams'
+  | 'progress'
+  | 'formulas'
+  | 'assistant';
+
+export type MathLabId = 'function' | 'matrix' | 'vector-geometry';
+
+export interface AppDestination {
+  section: AppSection;
+  courseId?: import('./domain/curriculum').CourseId;
+  topicId?: import('./domain/curriculum').TopicId;
+  labId?: MathLabId;
+}

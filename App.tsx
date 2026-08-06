@@ -1,228 +1,54 @@
-import React, { lazy, Suspense, useState } from 'react';
-import { Sidebar } from './components/Sidebar';
-import { ViewMode, ModuleType } from './types';
-import { DashboardView } from './views/DashboardView';
+import React, { useState } from 'react';
+import { Menu } from 'lucide-react';
 import { AnimatedBackground } from './components/AnimatedBackground';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { LoaderCircle, Lock, Menu } from 'lucide-react';
-import { usePersistedState } from './utils/usePersistedState';
-import {
-  getDefaultViewForModule,
-  LearningDestinationRef,
-} from './data/learningCatalog';
+import { Sidebar } from './components/Sidebar';
+import { BottomNavigation } from './components/layout/BottomNavigation';
+import { DashboardView } from './views/DashboardView';
+import { CourseHubView } from './views/CourseHubView';
+import { LessonWorkspaceView } from './views/LessonWorkspaceView';
+import { AppDestination } from './types';
+import { getCourse, getTopic } from './data/courseCatalog';
+import { createDefaultMathCsState, loadMathCsState, MathCsState, saveMathCsState } from './utils/mathCsStorage';
+import { markTopicComplete } from './utils/progress';
 
-const BasicsView = lazy(() => import('./views/BasicsView').then(({ BasicsView }) => ({ default: BasicsView })));
-const OperationsView = lazy(() => import('./views/OperationsView').then(({ OperationsView }) => ({ default: OperationsView })));
-const DeterminantView = lazy(() => import('./views/DeterminantView').then(({ DeterminantView }) => ({ default: DeterminantView })));
-const InverseView = lazy(() => import('./views/InverseView').then(({ InverseView }) => ({ default: InverseView })));
-const HomeworkView = lazy(() => import('./views/ExercisesView').then(({ HomeworkView }) => ({ default: HomeworkView })));
-const SequencesView = lazy(() => import('./views/SequencesView').then(({ SequencesView }) => ({ default: SequencesView })));
-const Sequences3DView = lazy(() => import('./views/Sequences3DView').then(({ Sequences3DView }) => ({ default: Sequences3DView })));
-const FunctionsView = lazy(() => import('./views/FunctionsView').then(({ FunctionsView }) => ({ default: FunctionsView })));
-const Surface3DView = lazy(() => import('./views/Surface3DView').then(({ Surface3DView }) => ({ default: Surface3DView })));
-const FinalExamView = lazy(() => import('./views/FinalExamView').then(({ FinalExamView }) => ({ default: FinalExamView })));
-const ExamAnalysisView = lazy(() => import('./views/ExamAnalysisView').then(({ ExamAnalysisView }) => ({ default: ExamAnalysisView })));
-const DerivativesRulesView = lazy(() => import('./views/DerivativesRulesView').then(({ DerivativesRulesView }) => ({ default: DerivativesRulesView })));
-const FunctionAnalysisView = lazy(() => import('./views/FunctionAnalysisView').then(({ FunctionAnalysisView }) => ({ default: FunctionAnalysisView })));
-const SystemsView = lazy(() => import('./views/SystemsView').then(({ SystemsView }) => ({ default: SystemsView })));
-const ContinuityView = lazy(() => import('./views/ContinuityView').then(({ ContinuityView }) => ({ default: ContinuityView })));
-const GaussianView = lazy(() => import('./views/GaussianView').then(({ GaussianView }) => ({ default: GaussianView })));
-const EigenView = lazy(() => import('./views/EigenView').then(({ EigenView }) => ({ default: EigenView })));
-const CobwebView = lazy(() => import('./views/CobwebView').then(({ CobwebView }) => ({ default: CobwebView })));
-const SeriesView = lazy(() => import('./views/SeriesView').then(({ SeriesView }) => ({ default: SeriesView })));
-const TransformationsView = lazy(() => import('./views/TransformationsView').then(({ TransformationsView }) => ({ default: TransformationsView })));
-const NewtonView = lazy(() => import('./views/NewtonView').then(({ NewtonView }) => ({ default: NewtonView })));
-const TaylorSeriesView = lazy(() => import('./views/TaylorSeriesView').then(({ TaylorSeriesView }) => ({ default: TaylorSeriesView })));
-const IntegralBasicsView = lazy(() => import('./views/IntegralBasicsView').then(({ IntegralBasicsView }) => ({ default: IntegralBasicsView })));
-const IntegralRulesView = lazy(() => import('./views/IntegralRulesView').then(({ IntegralRulesView }) => ({ default: IntegralRulesView })));
-const AreaUnderCurveView = lazy(() => import('./views/AreaUnderCurveView').then(({ AreaUnderCurveView }) => ({ default: AreaUnderCurveView })));
-const Integrals3DView = lazy(() => import('./views/Integrals3DView').then(({ Integrals3DView }) => ({ default: Integrals3DView })));
-const DiffEqBasicsView = lazy(() => import('./views/DiffEqBasicsView').then(({ DiffEqBasicsView }) => ({ default: DiffEqBasicsView })));
-const PopulationModelsView = lazy(() => import('./views/PopulationModelsView').then(({ PopulationModelsView }) => ({ default: PopulationModelsView })));
-const RadioactiveDecayView = lazy(() => import('./views/RadioactiveDecayView').then(({ RadioactiveDecayView }) => ({ default: RadioactiveDecayView })));
-const DiffEq3DView = lazy(() => import('./views/DiffEq3DView').then(({ DiffEq3DView }) => ({ default: DiffEq3DView })));
-const CheatSheetView = lazy(() => import('./views/CheatSheetView').then(({ CheatSheetView }) => ({ default: CheatSheetView })));
-const LinearTransformation3DView = lazy(() => import('./views/LinearTransformation3DView').then(({ LinearTransformation3DView }) => ({ default: LinearTransformation3DView })));
-const VectorOperations3DView = lazy(() => import('./views/VectorOperations3DView').then(({ VectorOperations3DView }) => ({ default: VectorOperations3DView })));
-const AIChatView = lazy(() => import('./views/AIChatView').then(({ AIChatView }) => ({ default: AIChatView })));
-
-const EmptyExamView: React.FC<{ title: string }> = ({ title }) => (
-  <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6">
-    <div className="p-6 bg-slate-900/50 rounded-full border border-slate-800 shadow-xl backdrop-blur-sm">
-      <Lock size={48} className="text-slate-600" />
-    </div>
-    <div className="space-y-2">
-      <h2 className="text-3xl font-bold text-white tracking-tight">{title}</h2>
-      <div className="px-3 py-1 rounded-full bg-slate-800/50 text-xs font-mono text-slate-400 inline-block border border-slate-700">
-        STATUS: LOCKED
-      </div>
-    </div>
-    <p className="text-slate-400 max-w-md text-sm leading-relaxed">
-      This examination module is currently unavailable. Please proceed to the <strong>Final Exam</strong> for comprehensive assessment.
-    </p>
-  </div>
-);
-
-const ViewLoadingFallback: React.FC = () => (
-  <div
-    className="min-h-[60vh] flex flex-col items-center justify-center gap-4 text-center"
-    role="status"
-    aria-live="polite"
-  >
-    <div className="p-4 rounded-2xl bg-accent-cyan/10 border border-accent-cyan/20 text-accent-cyan">
-      <LoaderCircle size={30} className="animate-spin" />
-    </div>
-    <div>
-      <p className="font-semibold text-white">Preparing the learning lab</p>
-      <p className="text-xs text-slate-500 mt-1">Loading only the resources required for this topic.</p>
-    </div>
-  </div>
-);
-
-const App: React.FC = () => {
-  const [currentModule, setCurrentModule] = usePersistedState<ModuleType>('app_module', ModuleType.HOME);
-  const [view, setView] = usePersistedState<ViewMode>('app_view', ViewMode.BASICS);
-  const [lastDestination, setLastDestination] = usePersistedState<LearningDestinationRef | null>(
-    'last_learning_destination',
-    null,
-  );
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const shouldReduceMotion = useReducedMotion();
-
-  const navigateTo = (destination: LearningDestinationRef) => {
-    setCurrentModule(destination.module);
-    setView(destination.view);
-    setLastDestination(destination);
-    setIsMobileMenuOpen(false);
-  };
-
-  const handleModuleSelect = (module: ModuleType) => {
-    navigateTo({
-      module,
-      view: getDefaultViewForModule(module),
-    });
-  };
-
-  const handleViewSelect = (nextView: ViewMode) => {
-    setView(nextView);
-    if (currentModule !== ModuleType.HOME) {
-      setLastDestination({
-        module: currentModule,
-        view: nextView,
-      });
-    }
-  };
-
-  const handleGoHome = () => {
-    setCurrentModule(ModuleType.HOME);
-    setIsMobileMenuOpen(false);
-  };
-
-  const renderView = () => {
-    switch (view) {
-      case ViewMode.BASICS: return <BasicsView />;
-      case ViewMode.OPERATIONS: return <OperationsView />;
-      case ViewMode.DETERMINANT: return <DeterminantView />;
-      case ViewMode.INVERSE: return <InverseView />;
-      case ViewMode.SYSTEMS: return <SystemsView />;
-      case ViewMode.GAUSSIAN: return <GaussianView />;
-      case ViewMode.EIGENVALUES: return <EigenView />;
-      case ViewMode.VECTOR_3D: return <LinearTransformation3DView />;
-      case ViewMode.VECTOR_OPS_3D: return <VectorOperations3DView />;
-      case ViewMode.SEQUENCES: return <SequencesView />;
-      case ViewMode.SERIES: return <SeriesView />;
-      case ViewMode.COBWEB: return <CobwebView />;
-      case ViewMode.SEQUENCES_3D: return <Sequences3DView />;
-      case ViewMode.FUNCTIONS: return <FunctionsView />;
-      case ViewMode.TRANSFORMATIONS: return <TransformationsView />;
-      case ViewMode.NEWTON: return <NewtonView />;
-      case ViewMode.FUNCTIONS_3D: return <Surface3DView mode="function" />;
-      case ViewMode.LIMITS: return <FunctionsView />;
-      case ViewMode.CONTINUITY: return <ContinuityView />;
-      case ViewMode.LIMITS_3D: return <Surface3DView mode="limit" />;
-      case ViewMode.DERIVATIVE_RULES: return <DerivativesRulesView />;
-      case ViewMode.FUNCTION_ANALYSIS: return <FunctionAnalysisView />;
-      case ViewMode.TAYLOR: return <TaylorSeriesView />;
-      case ViewMode.DERIVATIVES_3D: return <Surface3DView mode="derivative" />;
-      case ViewMode.INTEGRAL_BASICS: return <IntegralBasicsView />;
-      case ViewMode.INTEGRAL_RULES: return <IntegralRulesView />;
-      case ViewMode.AREA_UNDER_CURVE: return <AreaUnderCurveView />;
-      case ViewMode.INTEGRALS_3D: return <Integrals3DView />;
-      case ViewMode.DIFF_BASICS: return <DiffEqBasicsView />;
-      case ViewMode.POPULATION_MODELS: return <PopulationModelsView />;
-      case ViewMode.RADIOACTIVE_DECAY: return <RadioactiveDecayView />;
-      case ViewMode.DIFF_EQ_3D: return <DiffEq3DView />;
-      case ViewMode.CLASS_EXAM_1: return <EmptyExamView title="Class Exam I" />;
-      case ViewMode.CLASS_EXAM_2: return <EmptyExamView title="Class Exam II" />;
-      case ViewMode.CLASS_EXAM_3: return <EmptyExamView title="Class Exam III" />;
-      case ViewMode.FULL_EXAM: return <FinalExamView key="FINAL" examMode="FINAL" />;
-      case ViewMode.EXAM_ANALYSIS: return <ExamAnalysisView />;
-      case ViewMode.HOMEWORK: return <HomeworkView key={currentModule} module={currentModule} />;
-      case ViewMode.FINAL_EXAM: return <FinalExamView key={currentModule} module={currentModule} />;
-      case ViewMode.CHEAT_SHEET: return <CheatSheetView key={currentModule} module={currentModule} />;
-      case ViewMode.AI_CHAT: return <AIChatView />;
-      default: return <BasicsView />;
-    }
-  };
-
-  return (
-    <div className="relative min-h-screen bg-background text-slate-200 font-sans selection:bg-accent-cyan/30 overflow-hidden">
-      <AnimatedBackground />
-
-      <div className="relative z-10">
-        {currentModule === ModuleType.HOME ? (
-          <DashboardView
-            onSelectModule={handleModuleSelect}
-            onNavigate={navigateTo}
-            lastDestination={lastDestination}
-          />
-        ) : (
-          <div className="flex h-screen overflow-hidden">
-            <Sidebar
-              currentView={view}
-              currentModule={currentModule}
-              setView={handleViewSelect}
-              goHome={handleGoHome}
-              isOpen={isMobileMenuOpen}
-              toggleSidebar={() => setIsMobileMenuOpen((open) => !open)}
-            />
-
-            <main className="flex-1 md:ml-20 lg:ml-0 overflow-y-auto h-full relative">
-              <div className="md:hidden sticky top-0 z-30 flex items-center justify-between p-4 bg-background/80 backdrop-blur-md border-b border-white/5">
-                <button
-                  onClick={() => setIsMobileMenuOpen(true)}
-                  className="p-2 rounded-lg text-white hover:bg-white/10 transition-colors"
-                  aria-label="Open learning navigation"
-                >
-                  <Menu size={24} />
-                </button>
-                <span className="text-xs font-bold text-accent-cyan tracking-widest uppercase glow-text">
-                  {currentModule.replace('_', ' ')}
-                </span>
-                <div className="w-10" aria-hidden="true" />
-              </div>
-
-              <div className="max-w-[1600px] mx-auto p-4 md:p-8 pb-32">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={view}
-                    initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 20, filter: 'blur(10px)' }}
-                    animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                    exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -20, filter: 'blur(10px)' }}
-                    transition={{ duration: shouldReduceMotion ? 0.01 : 0.4, ease: 'easeOut' }}
-                  >
-                    <Suspense fallback={<ViewLoadingFallback />}>
-                      {renderView()}
-                    </Suspense>
-                  </motion.div>
-                </AnimatePresence>
-              </div>
-            </main>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+const isValidDestination = (destination: AppDestination): boolean => {
+  if (destination.section === 'course') return Boolean(destination.courseId && getCourse(destination.courseId));
+  if (destination.section === 'lesson') return Boolean(destination.courseId && destination.topicId && getTopic(destination.courseId, destination.topicId));
+  return true;
 };
 
+const Placeholder: React.FC<{ title: string; description: string }> = ({ title, description }) => <div className="mx-auto max-w-4xl"><h1 className="text-3xl font-bold text-white">{title}</h1><div className="notebook-panel mt-5 p-6"><p className="leading-7 text-slate-300">{description}</p></div></div>;
+
+const App: React.FC = () => {
+  const initial = typeof window === 'undefined' ? createDefaultMathCsState() : loadMathCsState();
+  const [state, setState] = useState<MathCsState>(initial);
+  const stored = initial.lastDestination as AppDestination | null;
+  const [destination, setDestination] = useState<AppDestination>(stored && isValidDestination(stored) ? stored : { section: 'dashboard' });
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const updateState = (next: MathCsState) => { setState(next); saveMathCsState(next); };
+  const navigate = (next: AppDestination) => {
+    const safe = isValidDestination(next) ? next : { section: 'dashboard' } as AppDestination;
+    setDestination(safe);
+    updateState({ ...state, lastDestination: safe });
+    setMenuOpen(false);
+  };
+
+  const renderContent = () => {
+    if (!isValidDestination(destination)) return <div className="mx-auto max-w-xl text-center"><h1 className="text-3xl font-bold text-white">Learning path not found</h1><p className="mt-3 text-slate-400">Choose a safe destination to continue.</p><div className="mt-5 flex justify-center gap-3"><button className="focus-ring rounded-lg bg-cyan-300 px-4 py-2 text-slate-950" onClick={() => navigate({ section: 'dashboard' })}>Dashboard</button><button className="focus-ring rounded-lg border border-white/10 px-4 py-2" onClick={() => navigate({ section: 'course', courseId: 'math-analysis' })}>Math I</button><button className="focus-ring rounded-lg border border-white/10 px-4 py-2" onClick={() => navigate({ section: 'course', courseId: 'linear-algebra-geometry' })}>Math II</button></div></div>;
+    switch (destination.section) {
+      case 'dashboard': return <DashboardView state={state} onNavigate={navigate} />;
+      case 'course': return <CourseHubView courseId={destination.courseId!} state={state} onNavigate={navigate} />;
+      case 'lesson': return <LessonWorkspaceView courseId={destination.courseId!} topicId={destination.topicId!} state={state} onNavigate={navigate} onComplete={(topicId) => updateState(markTopicComplete(state, topicId))} />;
+      case 'math-lab': return <Placeholder title="Math Lab" description="Function Explorer, Matrix Lab, and Vector & Geometry Lab are being consolidated into this controlled workspace." />;
+      case 'practice': return <Placeholder title="Practice" description="Topic-filtered guided practice will use the same deterministic curriculum question bank." />;
+      case 'exams': return <Placeholder title="Exams" description="Course checkpoints and mock examinations will report results by topic." />;
+      case 'progress': return <Placeholder title="Progress" description="Completion, mastery, and review recommendations remain local to this device." />;
+      case 'formulas': return <Placeholder title="Formula Workspace" description="Saved formulas and personal notes will appear here." />;
+      case 'assistant': return <Placeholder title="Math Assistant" description="The contextual assistant will provide bounded, stepwise hints for the active topic." />;
+    }
+  };
+
+  return <div className="min-h-screen bg-[#07111f] text-[#f4f1e8]"><AnimatedBackground /><Sidebar destination={destination} onNavigate={navigate} isOpen={menuOpen} onClose={() => setMenuOpen(false)} /><header className="sticky top-0 z-30 flex h-14 items-center border-b border-white/8 bg-[#07111f]/90 px-4 backdrop-blur md:hidden"><button className="focus-ring rounded-lg p-2" onClick={() => setMenuOpen(true)} aria-label="Open navigation"><Menu /></button><span className="ml-3 font-semibold text-white">Math-CS</span></header><main className="min-h-screen px-4 py-6 pb-24 md:ml-72 md:px-8 md:py-8 md:pb-10">{renderContent()}</main><BottomNavigation destination={destination} onNavigate={navigate} /></div>;
+};
 export default App;
