@@ -28,3 +28,11 @@ Baseline head before implementation: `3d2dbabca7c62e89c5840ca8f9f4f05f25a765be`.
 - Deliverables: `getOverallProgress`, `CosmicProgressRing`, `CosmicLogoMark`, `CourseVisual`, component test, and ring CSS.
 - Review: overall completion uses all 17 approved topics; percentages are rounded and clamped; decorative SVGs are hidden from assistive technology; course visuals use fixed, typed course identifiers.
 
+## Task 4 — Redesign the Application Shell and Sidebar
+
+- Status: COMPLETE
+- RED/GREEN evidence: task-runner run `31093160088`; Sidebar and App progress contracts failed before implementation, then shell/navigation tests, typecheck, full verify, and Pages build succeeded.
+- Commit: `5622341fb6e2f61a8f55aa867a8cc037201ef70b`
+- Deliverables: premium black-glass sidebar, cosmic logo, active navigation treatment, real overall-progress card, and App-level selector wiring.
+- Review: exactly one main landmark remains; the slide-out mobile navigation and bottom navigation are preserved; all original destinations remain available; progress is derived from stored completion rather than hard-coded.
+
