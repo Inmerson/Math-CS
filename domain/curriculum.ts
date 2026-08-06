@@ -34,7 +34,7 @@ export interface PracticeQuestion {
   kind: QuestionKind;
   prompt: string;
   choices?: string[];
-  answer: string | number | number[] | number[][];
+  answer: string | number | string[] | number[] | number[][];
   tolerance?: number;
   explanation: string;
 }
