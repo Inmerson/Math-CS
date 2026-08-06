@@ -60,3 +60,11 @@ Baseline head before implementation: `3d2dbabca7c62e89c5840ca8f9f4f05f25a765be`.
 - Deliverables: `CosmicPageHeader`; course, lesson, lab, practice, exams, progress, formula, and assistant cosmic shells; visual-system assertions in existing tests.
 - Review: no internal view uses the photorealistic hero asset; reading and assessment surfaces remain high-contrast; original lab tabs, quiz construction, grading callbacks, formula persistence, assistant scope, and navigation behavior remain unchanged.
 
+## Task 8 — Harden Responsive and Accessibility Behavior
+
+- Status: COMPLETE
+- RED/GREEN evidence: run `31094314606` confirmed missing safe-area/touch selectors; run `31094548928` exposed the old mobile-navigation accessible-name expectation; final run `31094661563` passed resilience, fallback, App shell, navigation, typecheck, full verify, and Pages build.
+- Commit: `bd8a0f093991445272ac9a1201bb62a5afad1c34`
+- Deliverables: mobile-first hero stacking, safe-area navigation, 44 px coarse-pointer targets, responsive progress sizing, fallback-image test, reduced-motion hardening, and production-CSS selector regression coverage.
+- Review: visible mobile labels remain unchanged; the More control has the clearer accessible name “More navigation options”; desktop and tablet hero treatments remain distinct; no essential content depends on the image or animation.
+
