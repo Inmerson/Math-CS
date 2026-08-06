@@ -36,3 +36,11 @@ Baseline head before implementation: `3d2dbabca7c62e89c5840ca8f9f4f05f25a765be`.
 - Deliverables: premium black-glass sidebar, cosmic logo, active navigation treatment, real overall-progress card, and App-level selector wiring.
 - Review: exactly one main landmark remains; the slide-out mobile navigation and bottom navigation are preserved; all original destinations remain available; progress is derived from stored completion rather than hard-coded.
 
+## Task 5 — Build the Cinematic Dashboard Hero and Utility Cards
+
+- Status: COMPLETE
+- RED/GREEN evidence: initial run `31093365458` confirmed missing hero/dashboard contracts, then exposed the absent Vite environment typing; retry run `31093493536` passed component tests, typecheck, full verify, and Pages build.
+- Commit: `923f5e8d9f5b2d56739f9a0a8ef57c925084fe30`
+- Deliverables: `CosmicHero`, `UtilityCard`, dashboard composition, Pages-aware hero asset URL, hero/utility CSS, and `vite-env.d.ts`.
+- Review: the image is decorative and has a gradient fallback; search behavior and destination mapping are unchanged; no fake shortcut, account, or notification control was introduced; Math Lab and Formula Workspace remain keyboard-accessible buttons.
+
