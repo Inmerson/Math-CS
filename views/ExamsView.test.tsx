@@ -1,0 +1,2 @@
+import { fireEvent, render, screen } from '@testing-library/react'; import { describe, expect, it, vi } from 'vitest'; import { ExamsView } from './ExamsView';
+describe('ExamsView',()=>{it('offers two course exams and a combined review',()=>{render(<ExamsView onComplete={vi.fn()}/>);expect(screen.getByRole('button',{name:'Math I'})).toBeInTheDocument();expect(screen.getByRole('button',{name:'Math II'})).toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'Combined review'}));expect(screen.getByText('Combined review exam')).toBeInTheDocument();});});

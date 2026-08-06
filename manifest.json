@@ -1,0 +1,11 @@
+{
+  "name": "Inmerson Math-CS • Interactive Mathematics for Computer Science",
+  "short_name": "Math-CS",
+  "description": "Interactive Mathematical Analysis and Linear Algebra & Geometry for computer science.",
+  "start_url": "/Math-CS/",
+  "scope": "/Math-CS/",
+  "display": "standalone",
+  "background_color": "#07111f",
+  "theme_color": "#0f766e",
+  "icons": []
+}

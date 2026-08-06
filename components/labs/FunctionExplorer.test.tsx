@@ -1,0 +1,2 @@
+import { render, screen } from '@testing-library/react'; import { describe, expect, it } from 'vitest'; import { FunctionExplorer } from './FunctionExplorer';
+describe('FunctionExplorer',()=>{it('renders bounded labelled controls and interpretation',()=>{render(<FunctionExplorer presetId="functions-graphs"/>);expect(screen.getByRole('img',{name:/Quadratic Graph graph/})).toBeInTheDocument();expect(screen.getByLabelText('Quadratic coefficient a')).toHaveAttribute('min','-3');expect(screen.getByText(/Coefficients control curvature/)).toBeInTheDocument();});});

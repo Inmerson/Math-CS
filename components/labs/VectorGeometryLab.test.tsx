@@ -1,0 +1,2 @@
+import { render, screen } from '@testing-library/react'; import { describe, expect, it } from 'vitest'; import { VectorGeometryLab } from './VectorGeometryLab';
+describe('VectorGeometryLab',()=>{it('provides labels, equivalent visual description, and text results',()=>{render(<VectorGeometryLab/>);expect(screen.getByRole('img',{name:/showing vectors u and v/})).toBeInTheDocument();expect(screen.getAllByLabelText('x')).toHaveLength(2);expect(screen.getByText(/u\+v=/)).toBeInTheDocument();});});

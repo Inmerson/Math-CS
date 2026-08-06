@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: inmerson-math-cs-api
+    env: node
+    rootDir: server
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
