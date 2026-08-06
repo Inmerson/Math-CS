@@ -68,3 +68,11 @@ Baseline head before implementation: `3d2dbabca7c62e89c5840ca8f9f4f05f25a765be`.
 - Deliverables: mobile-first hero stacking, safe-area navigation, 44 px coarse-pointer targets, responsive progress sizing, fallback-image test, reduced-motion hardening, and production-CSS selector regression coverage.
 - Review: visible mobile labels remain unchanged; the More control has the clearer accessible name “More navigation options”; desktop and tablet hero treatments remain distinct; no essential content depends on the image or animation.
 
+## Task 9 — Run Full Acceptance and Deployment Validation
+
+- Status: COMPLETE
+- Fresh evidence: task-runner run `31094866834`; `npm run verify`, `npm run build:pages`, server dependency/install build, and generated-site assertions all exited successfully.
+- Commit: `3fc5a10c66b2bc557067c9a75bdecb17ff00b979`
+- Report: `docs/superpowers/reports/2026-08-06-cosmic-black-hole-ui-verification.md`
+- Review: generated Pages output uses `/Math-CS/`; the hero is copied and referenced; cosmic selectors are present in the production CSS; the photorealistic asset is isolated to `CosmicHero`; the server TypeScript build remains healthy.
+
