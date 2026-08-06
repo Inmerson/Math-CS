@@ -7,24 +7,14 @@ import {
   BRAND_TAGLINE,
 } from './branding';
 
-describe('personal branding', () => {
-  it('uses the approved Inmerson identity', () => {
-    expect(BRAND_NAME).toBe('Inmerson');
-    expect(BRAND_TAGLINE).toBe('Personal Math & Biotech Lab');
-    expect(BRAND_FULL_NAME).toBe('Inmerson • Personal Math & Biotech Lab');
-    expect(BRAND_SHORT_NAME).toBe('Inmerson Lab');
-  });
-
-  it('contains no university attribution', () => {
-    const branding = [
-      BRAND_NAME,
-      BRAND_TAGLINE,
-      BRAND_FULL_NAME,
-      BRAND_SHORT_NAME,
-      BRAND_DESCRIPTION,
-    ].join(' ');
-
-    expect(branding).not.toContain('Warsaw University of Life Sciences');
-    expect(branding).not.toContain('SGGW');
+describe('Math-CS branding', () => {
+  it('uses the approved identity', () => {
+    expect(BRAND_NAME).toBe('Inmerson Math-CS');
+    expect(BRAND_TAGLINE).toBe('Interactive Mathematics for Computer Science');
+    expect(BRAND_FULL_NAME).toBe('Inmerson Math-CS • Interactive Mathematics for Computer Science');
+    expect(BRAND_SHORT_NAME).toBe('Math-CS');
+    expect(BRAND_DESCRIPTION).toContain('Mathematical Analysis');
+    expect(BRAND_DESCRIPTION).toContain('Linear Algebra');
+    expect(BRAND_DESCRIPTION).not.toMatch(/biotech|biology|DNA/i);
   });
 });

@@ -1,5 +1,4 @@
 {
-  "name": "Inmerson • Personal Math & Biotech Lab",
-  "description": "A personal interactive laboratory for mathematical modeling, biotechnology, observation and learning.",
-  "requestFramePermissions": []
+  "name": "Inmerson Math-CS",
+  "description": "Interactive Mathematics for Computer Science: Mathematical Analysis and Linear Algebra & Geometry."
 }
