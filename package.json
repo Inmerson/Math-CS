@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "verify": "npm run typecheck && npm test && npm run check:domain && npm run build",
+    "verify": "bash scripts/build-readshift-ci.sh",
     "check:domain": "node scripts/check-domain-clean.mjs"
   },
   "dependencies": {
